@@ -1,5 +1,6 @@
 const queryApi = new URLSearchParams(window.location.search).get("api");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
 const ticketNumberEl = document.getElementById("ticket-number");
 const statusEl = document.getElementById("status");
@@ -7,6 +8,31 @@ const retryBtn = document.getElementById("retry");
 
 let currentTicketId = null;
 let hasNotified = false;
+let pollIntervalId = null;
+let audioCtx = null;
+
+function getAudioContext() {
+  if (!AudioContextClass) {
+    return null;
+  }
+
+  if (!audioCtx) {
+    audioCtx = new AudioContextClass();
+  }
+
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume().catch(() => {});
+  }
+
+  return audioCtx;
+}
+
+function unlockAudio() {
+  getAudioContext();
+}
+
+window.addEventListener("pointerdown", unlockAudio, { passive: true });
+window.addEventListener("keydown", unlockAudio);
 
 retryBtn?.addEventListener("click", () => {
   retryBtn.hidden = true;
@@ -39,17 +65,21 @@ async function createTicket() {
 }
 
 function beep(pattern = [220, 150, 280]) {
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  let timeline = audioCtx.currentTime;
+  const context = getAudioContext();
+  if (!context) {
+    return;
+  }
+
+  let timeline = context.currentTime;
 
   pattern.forEach((duration) => {
-    const oscillator = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
     oscillator.type = "sine";
     oscillator.frequency.value = 880;
     gain.gain.value = 0.18;
     oscillator.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(context.destination);
     oscillator.start(timeline);
     oscillator.stop(timeline + duration / 1000);
     timeline += duration / 1000 + 0.04;
@@ -85,8 +115,13 @@ async function pollTicket() {
 
 function startPolling() {
   hasNotified = false;
+
+  if (pollIntervalId) {
+    window.clearInterval(pollIntervalId);
+  }
+
   pollTicket();
-  window.setInterval(pollTicket, 2000);
+  pollIntervalId = window.setInterval(pollTicket, 2000);
 }
 
 createTicket();

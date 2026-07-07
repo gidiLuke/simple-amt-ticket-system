@@ -1,22 +1,51 @@
 const queryApi = new URLSearchParams(window.location.search).get("api");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
 const ticketsEl = document.getElementById("tickets");
 const badgeEl = document.getElementById("agent-badge");
 let seenTicketIds = new Set();
+let audioCtx = null;
+
+function getAudioContext() {
+  if (!AudioContextClass) {
+    return null;
+  }
+
+  if (!audioCtx) {
+    audioCtx = new AudioContextClass();
+  }
+
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume().catch(() => {});
+  }
+
+  return audioCtx;
+}
+
+function unlockAudio() {
+  getAudioContext();
+}
+
+window.addEventListener("pointerdown", unlockAudio, { passive: true });
+window.addEventListener("keydown", unlockAudio);
 
 function ring() {
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const oscillator = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
+  const context = getAudioContext();
+  if (!context) {
+    return;
+  }
+
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
   oscillator.type = "triangle";
-  oscillator.frequency.setValueAtTime(560, audioCtx.currentTime);
-  oscillator.frequency.linearRampToValueAtTime(980, audioCtx.currentTime + 0.18);
+  oscillator.frequency.setValueAtTime(560, context.currentTime);
+  oscillator.frequency.linearRampToValueAtTime(980, context.currentTime + 0.18);
   gain.gain.value = 0.18;
   oscillator.connect(gain);
-  gain.connect(audioCtx.destination);
+  gain.connect(context.destination);
   oscillator.start();
-  oscillator.stop(audioCtx.currentTime + 0.22);
+  oscillator.stop(context.currentTime + 0.22);
 }
 
 function formatTime(isoString) {

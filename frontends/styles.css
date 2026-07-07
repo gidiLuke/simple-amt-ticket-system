@@ -1,12 +1,14 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap");
+
 :root {
-  --bg: #071126;
-  --card: rgba(16, 27, 49, 0.9);
-  --muted: #98a7c7;
-  --text: #e9f0ff;
-  --accent: #49a5ff;
-  --accent-2: #54e4b4;
-  --danger: #ff6a7d;
-  --border: rgba(146, 171, 219, 0.22);
+  --bg: #f6f8fb;
+  --card: rgba(255, 255, 255, 0.92);
+  --muted: #5c667a;
+  --text: #111a2e;
+  --accent: #ea0016;
+  --accent-2: #b00011;
+  --danger: #ea0016;
+  --border: rgba(17, 26, 46, 0.12);
 }
 
 * {
@@ -16,8 +18,11 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: radial-gradient(circle at top, #10254a 0%, var(--bg) 45%, #030815 100%);
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(234, 0, 22, 0.14) 0, rgba(234, 0, 22, 0) 36%),
+    radial-gradient(circle at 88% 0%, rgba(176, 0, 17, 0.12) 0, rgba(176, 0, 17, 0) 30%),
+    linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
   color: var(--text);
 }
 
@@ -30,9 +35,9 @@ body {
 .glass {
   background: var(--card);
   border: 1px solid var(--border);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(6px);
   border-radius: 18px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 18px 40px rgba(17, 26, 46, 0.1);
 }
 
 .hero {
@@ -42,6 +47,7 @@ body {
 .headline {
   margin: 0;
   font-size: clamp(1.6rem, 4vw, 2.4rem);
+  letter-spacing: 0.02em;
 }
 
 .sub {
@@ -61,8 +67,9 @@ body {
   border-radius: 999px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  background: linear-gradient(90deg, rgba(73, 165, 255, 0.2), rgba(84, 228, 180, 0.2));
-  border: 1px solid rgba(84, 228, 180, 0.5);
+  color: #fff;
+  background: linear-gradient(90deg, var(--accent), #ff3b4f);
+  border: 1px solid rgba(176, 0, 17, 0.45);
 }
 
 .status {
@@ -71,7 +78,7 @@ body {
 }
 
 .status.ok {
-  color: var(--accent-2);
+  color: #0f7a43;
 }
 
 .grid {
@@ -88,7 +95,7 @@ body {
   padding: 16px 18px;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgba(9, 17, 32, 0.8);
+  background: #fff;
 }
 
 .ticket-number {
@@ -105,14 +112,17 @@ button {
   border: none;
   border-radius: 10px;
   padding: 10px 14px;
-  color: #00152d;
+  color: #fff;
   font-weight: 700;
-  background: linear-gradient(90deg, var(--accent), #7dc6ff);
+  background: linear-gradient(90deg, var(--accent), #ff3b4f);
   cursor: pointer;
+  box-shadow: 0 8px 18px rgba(234, 0, 22, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 button:hover {
   transform: translateY(-1px);
+  box-shadow: 0 12px 20px rgba(234, 0, 22, 0.3);
 }
 
 button:disabled {
@@ -121,9 +131,10 @@ button:disabled {
 }
 
 .secondary {
-  background: rgba(84, 228, 180, 0.14);
+  background: rgba(234, 0, 22, 0.08);
   color: var(--accent-2);
-  border: 1px solid rgba(84, 228, 180, 0.42);
+  border: 1px solid rgba(234, 0, 22, 0.3);
+  box-shadow: none;
 }
 
 .empty {
@@ -137,8 +148,9 @@ button:disabled {
   display: inline-block;
   padding: 8px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(234, 0, 22, 0.28);
   color: var(--muted);
   font-size: 0.82rem;
+  background: rgba(234, 0, 22, 0.06);
 }
 
