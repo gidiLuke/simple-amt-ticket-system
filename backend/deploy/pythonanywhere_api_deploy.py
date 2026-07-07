@@ -92,7 +92,11 @@ class PythonAnywhereApi:
 
     def reload_webapp(self, domain: str) -> None:
         encoded_domain = urllib.parse.quote(domain, safe="")
-        self._request("POST", f"/api/v0/user/{self.username}/webapps/{encoded_domain}/reload/")
+        # ASGI websites use the v1 websites endpoint; traditional WSGI apps use v0 webapps.
+        try:
+            self._request("POST", f"/api/v1/user/{self.username}/websites/{encoded_domain}/reload/")
+        except RuntimeError:
+            self._request("POST", f"/api/v0/user/{self.username}/webapps/{encoded_domain}/reload/")
         print(f"Reloaded {domain}")
 
 
