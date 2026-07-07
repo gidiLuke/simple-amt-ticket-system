@@ -168,7 +168,7 @@ Repository secret:
 
 - `PA_API_TOKEN`: your PythonAnywhere API token
 
-Repository variables:
+Repository variables or secrets:
 
 - `PA_API_HOST`: `eu.pythonanywhere.com` for EU accounts or `www.pythonanywhere.com` for US accounts
 - `PA_USERNAME`: your PythonAnywhere username
@@ -185,6 +185,7 @@ Notes:
 - This works on free PythonAnywhere accounts because it uses the HTTPS API rather than SSH/SFTP.
 - Dependency changes are not fully automated. If `backend/requirements.txt` changes, you must open a PythonAnywhere Bash console and run `workon amt-tickets && pip install -r ~/simple-amt-ticket-system/backend/requirements.txt`.
 - The GitHub Actions workflow detects changes to `backend/requirements.txt` and ends with a warning plus a job summary note when that manual step is required.
+- The workflow also fails early with a clear summary if any required PythonAnywhere GitHub settings are missing.
 - The workflow no longer needs `PA_SSH_HOST`, `PA_SSH_USER`, `PA_SSH_KEY`, or a GitHub webhook secret.
 
 ---

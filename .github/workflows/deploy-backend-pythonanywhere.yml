@@ -45,12 +45,44 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Validate PythonAnywhere configuration
+        env:
+          PA_API_TOKEN: ${{ secrets.PA_API_TOKEN }}
+          PA_API_HOST: ${{ vars.PA_API_HOST || secrets.PA_API_HOST }}
+          PA_USERNAME: ${{ vars.PA_USERNAME || secrets.PA_USERNAME }}
+          PA_WEBAPP_DOMAIN: ${{ vars.PA_WEBAPP_DOMAIN || secrets.PA_WEBAPP_DOMAIN }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+          [[ -n "${PA_API_TOKEN}" ]] || missing+=("PA_API_TOKEN (secret)")
+          [[ -n "${PA_API_HOST}" ]] || missing+=("PA_API_HOST (variable or secret)")
+          [[ -n "${PA_USERNAME}" ]] || missing+=("PA_USERNAME (variable or secret)")
+          [[ -n "${PA_WEBAPP_DOMAIN}" ]] || missing+=("PA_WEBAPP_DOMAIN (variable or secret)")
+
+          if (( ${#missing[@]} > 0 )); then
+            printf -v joined '%s, ' "${missing[@]}"
+            joined=${joined%, }
+            echo "::error title=Missing PythonAnywhere workflow configuration::Set the following GitHub repository settings before rerunning: ${joined}."
+            {
+              echo "## Missing PythonAnywhere Configuration"
+              echo
+              echo "Set these GitHub repository settings before rerunning the deploy workflow:"
+              echo
+              echo "- Secret: PA_API_TOKEN"
+              echo "- Variable or secret: PA_API_HOST"
+              echo "- Variable or secret: PA_USERNAME"
+              echo "- Variable or secret: PA_WEBAPP_DOMAIN"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
       - name: Deploy via PythonAnywhere API
         env:
           PA_API_TOKEN: ${{ secrets.PA_API_TOKEN }}
-          PA_API_HOST: ${{ vars.PA_API_HOST }}
-          PA_USERNAME: ${{ vars.PA_USERNAME }}
-          PA_WEBAPP_DOMAIN: ${{ vars.PA_WEBAPP_DOMAIN }}
+          PA_API_HOST: ${{ vars.PA_API_HOST || secrets.PA_API_HOST }}
+          PA_USERNAME: ${{ vars.PA_USERNAME || secrets.PA_USERNAME }}
+          PA_WEBAPP_DOMAIN: ${{ vars.PA_WEBAPP_DOMAIN || secrets.PA_WEBAPP_DOMAIN }}
         run: |
           set -euo pipefail
           python backend/deploy/pythonanywhere_api_deploy.py
