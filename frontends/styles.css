@@ -1,0 +1,144 @@
+:root {
+  --bg: #071126;
+  --card: rgba(16, 27, 49, 0.9);
+  --muted: #98a7c7;
+  --text: #e9f0ff;
+  --accent: #49a5ff;
+  --accent-2: #54e4b4;
+  --danger: #ff6a7d;
+  --border: rgba(146, 171, 219, 0.22);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top, #10254a 0%, var(--bg) 45%, #030815 100%);
+  color: var(--text);
+}
+
+.shell {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 40px 18px 60px;
+}
+
+.glass {
+  background: var(--card);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.32);
+}
+
+.hero {
+  padding: 28px;
+}
+
+.headline {
+  margin: 0;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+}
+
+.sub {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.ticket-display {
+  margin-top: 22px;
+  display: grid;
+  gap: 12px;
+}
+
+.ticket-pill {
+  display: inline-block;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: linear-gradient(90deg, rgba(73, 165, 255, 0.2), rgba(84, 228, 180, 0.2));
+  border: 1px solid rgba(84, 228, 180, 0.5);
+}
+
+.status {
+  font-size: 0.98rem;
+  color: var(--muted);
+}
+
+.status.ok {
+  color: var(--accent-2);
+}
+
+.grid {
+  margin-top: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.ticket-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(9, 17, 32, 0.8);
+}
+
+.ticket-number {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #00152d;
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--accent), #7dc6ff);
+  cursor: pointer;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.secondary {
+  background: rgba(84, 228, 180, 0.14);
+  color: var(--accent-2);
+  border: 1px solid rgba(84, 228, 180, 0.42);
+}
+
+.empty {
+  padding: 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.badge {
+  margin-top: 14px;
+  display: inline-block;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+

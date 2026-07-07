@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AMT Office Queue | Agent Console</title>
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="glass hero">
+        <h1 class="headline">Agent Ticket Console</h1>
+        <p class="sub">Live queue for front-door QR scans.</p>
+        <span id="agent-badge" class="badge">Listening for new tickets...</span>
+      </section>
+
+      <section class="glass hero" style="margin-top: 20px">
+        <h2 style="margin: 0 0 12px">Open Tickets</h2>
+        <div id="tickets" class="grid"></div>
+      </section>
+    </main>
+
+    <script src="../config.js"></script>
+    <script src="./agent.js"></script>
+  </body>
+</html>
+

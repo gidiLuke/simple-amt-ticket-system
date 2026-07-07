@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Backend",
+      "type": "shell",
+      "command": "cd backend && python3 -m uvicorn app.main:app --reload --port 8000",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": {
+          "regexp": "^(.*)$",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Application startup complete\\."
+        }
+      }
+    },
+    {
+      "label": "Serve Frontends",
+      "type": "shell",
+      "command": "python3 -m http.server 4173 -d frontends",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": {
+          "regexp": "^(.*)$",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Serving HTTP on .* port 4173"
+        }
+      }
+    },
+    {
+      "label": "Run Full Stack",
+      "dependsOn": [
+        "Run Backend",
+        "Serve Frontends"
+      ],
+      "dependsOrder": "parallel"
+    }
+  ]
+}

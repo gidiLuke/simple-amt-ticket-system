@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AMT Office Queue | Your Ticket</title>
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="glass hero">
+        <h1 class="headline">Welcome 👋 Your queue ticket is being created...</h1>
+        <p class="sub">Hold tight. As soon as an agent calls your ticket, this screen will ring.</p>
+
+        <div class="ticket-display">
+          <div id="ticket-number" class="ticket-pill">Creating ticket...</div>
+          <p id="status" class="status">Connecting to queue service...</p>
+          <button id="retry" class="secondary" hidden>Try again</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="../config.js"></script>
+    <script src="./user.js"></script>
+  </body>
+</html>
+

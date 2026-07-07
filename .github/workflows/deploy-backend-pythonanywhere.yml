@@ -1,0 +1,31 @@
+name: Deploy Backend to PythonAnywhere
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend-pythonanywhere.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy using SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PA_SSH_HOST }}
+          username: ${{ secrets.PA_SSH_USER }}
+          key: ${{ secrets.PA_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/simple-amt-ticket-system
+            git fetch origin main
+            git reset --hard origin/main
+            ~/.virtualenvs/amt-tickets/bin/pip install -r backend/requirements.txt
+            touch ${{ secrets.PA_WSGI_FILE }}
+
