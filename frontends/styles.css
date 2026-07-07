@@ -61,6 +61,33 @@ body {
   gap: 12px;
 }
 
+.estimate-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.estimate-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.estimate-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.estimate-value {
+  margin-top: 4px;
+  font-size: 1.24rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .ticket-pill {
   display: inline-block;
   padding: 12px 20px;
@@ -137,6 +164,14 @@ button:disabled {
   box-shadow: none;
 }
 
+.secondary:hover {
+  box-shadow: none;
+}
+
+.sound-toggle {
+  width: fit-content;
+}
+
 .empty {
   padding: 18px;
   color: var(--muted);
@@ -152,5 +187,11 @@ button:disabled {
   color: var(--muted);
   font-size: 0.82rem;
   background: rgba(234, 0, 22, 0.06);
+}
+
+@media (max-width: 640px) {
+  .estimate-grid {
+    grid-template-columns: 1fr;
+  }
 }
 

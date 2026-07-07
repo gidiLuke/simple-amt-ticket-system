@@ -50,11 +50,51 @@ class TicketStore:
                 update={
                     "status": "closed",
                     "claimed_at": datetime.now(timezone.utc),
+                    "closed_by": "agent",
                 }
             )
             self._tickets[ticket_id] = updated
             self._save()
             return updated
+
+    def revoke_ticket(self, ticket_id: int) -> Ticket:
+        with self._lock:
+            if ticket_id not in self._tickets:
+                raise KeyError(ticket_id)
+
+            ticket = self._tickets[ticket_id]
+            if ticket.status == "closed":
+                return ticket
+
+            updated = ticket.model_copy(
+                update={
+                    "status": "closed",
+                    "claimed_at": datetime.now(timezone.utc),
+                    "closed_by": "user",
+                }
+            )
+            self._tickets[ticket_id] = updated
+            self._save()
+            return updated
+
+    def estimate_for_ticket(self, ticket_id: int) -> tuple[int, int, int]:
+        with self._lock:
+            if ticket_id not in self._tickets:
+                raise KeyError(ticket_id)
+
+            ticket = self._tickets[ticket_id]
+            if ticket.status == "closed":
+                return (0, 0, self._default_service_minutes())
+
+            open_tickets = sorted(
+                [item for item in self._tickets.values() if item.status == "open"],
+                key=lambda item: item.id,
+            )
+            people_ahead = len([item for item in open_tickets if item.id < ticket_id])
+
+            average_service_minutes = self._average_service_minutes()
+            estimated_wait_minutes = people_ahead * average_service_minutes
+            return (people_ahead, estimated_wait_minutes, average_service_minutes)
 
     def get_ticket(self, ticket_id: int) -> Ticket:
         with self._lock:
@@ -85,4 +125,25 @@ class TicketStore:
     @staticmethod
     def _format_number(ticket_id: int) -> str:
         return f"A-{ticket_id:04d}"
+
+    @staticmethod
+    def _default_service_minutes() -> int:
+        return 3
+
+    def _average_service_minutes(self) -> int:
+        closed_durations_minutes: list[int] = []
+        for ticket in self._tickets.values():
+            if ticket.claimed_at is None:
+                continue
+
+            duration_seconds = (ticket.claimed_at - ticket.created_at).total_seconds()
+            if duration_seconds <= 0:
+                continue
+
+            closed_durations_minutes.append(max(1, round(duration_seconds / 60)))
+
+        if not closed_durations_minutes:
+            return self._default_service_minutes()
+
+        return max(1, round(sum(closed_durations_minutes) / len(closed_durations_minutes)))
 

@@ -10,6 +10,7 @@ from app.models import (
     ClaimTicketResponse,
     CreateTicketResponse,
     OpenTicketsResponse,
+    TicketEstimateResponse,
     TicketStatusResponse,
 )
 from app.store import TicketStore
@@ -63,6 +64,14 @@ def create_app(storage_file: Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
         return ClaimTicketResponse(ticket=ticket)
 
+    @app.post("/api/tickets/{ticket_id}/revoke", response_model=ClaimTicketResponse)
+    def revoke_ticket(ticket_id: int) -> ClaimTicketResponse:
+        try:
+            ticket = store.revoke_ticket(ticket_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Ticket not found") from exc
+        return ClaimTicketResponse(ticket=ticket)
+
     @app.get("/api/tickets/{ticket_id}", response_model=TicketStatusResponse)
     def ticket_status(ticket_id: int) -> TicketStatusResponse:
         try:
@@ -70,6 +79,20 @@ def create_app(storage_file: Path | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
         return TicketStatusResponse(ticket=ticket)
+
+    @app.get("/api/tickets/{ticket_id}/estimate", response_model=TicketEstimateResponse)
+    def ticket_estimate(ticket_id: int) -> TicketEstimateResponse:
+        try:
+            people_ahead, estimated_wait_minutes, average_service_minutes = store.estimate_for_ticket(ticket_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Ticket not found") from exc
+
+        return TicketEstimateResponse(
+            ticket_id=ticket_id,
+            people_ahead=people_ahead,
+            estimated_wait_minutes=estimated_wait_minutes,
+            average_service_minutes=average_service_minutes,
+        )
 
     @app.get("/")
     def root() -> dict[str, str]:

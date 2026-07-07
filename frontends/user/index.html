@@ -15,6 +15,18 @@
         <div class="ticket-display">
           <div id="ticket-number" class="ticket-pill">Creating ticket...</div>
           <p id="status" class="status">Connecting to queue service...</p>
+          <button id="sound-toggle" class="secondary sound-toggle">Enable sound</button>
+          <div class="estimate-grid" id="estimate" hidden>
+            <div class="estimate-card">
+              <div class="estimate-label">People Ahead</div>
+              <div class="estimate-value" id="people-ahead">-</div>
+            </div>
+            <div class="estimate-card">
+              <div class="estimate-label">Estimated Wait</div>
+              <div class="estimate-value" id="wait-time">-</div>
+            </div>
+          </div>
+          <button id="revoke" class="secondary" hidden>Revoke Ticket</button>
           <button id="retry" class="secondary" hidden>Try again</button>
         </div>
       </section>

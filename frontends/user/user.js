@@ -1,15 +1,22 @@
 const queryApi = new URLSearchParams(window.location.search).get("api");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+const STORAGE_KEY = "amt_active_ticket_id";
 
 const ticketNumberEl = document.getElementById("ticket-number");
 const statusEl = document.getElementById("status");
 const retryBtn = document.getElementById("retry");
+const revokeBtn = document.getElementById("revoke");
+const soundToggleBtn = document.getElementById("sound-toggle");
+const estimateEl = document.getElementById("estimate");
+const peopleAheadEl = document.getElementById("people-ahead");
+const waitTimeEl = document.getElementById("wait-time");
 
 let currentTicketId = null;
 let hasNotified = false;
 let pollIntervalId = null;
 let audioCtx = null;
+let soundEnabled = false;
 
 function getAudioContext() {
   if (!AudioContextClass) {
@@ -27,22 +34,193 @@ function getAudioContext() {
   return audioCtx;
 }
 
-function unlockAudio() {
-  getAudioContext();
+function updateSoundButton() {
+  if (!soundToggleBtn) {
+    return;
+  }
+
+  soundToggleBtn.textContent = soundEnabled ? "Sound enabled" : "Enable sound";
 }
 
-window.addEventListener("pointerdown", unlockAudio, { passive: true });
-window.addEventListener("keydown", unlockAudio);
+async function enableSound(playPreview = true) {
+  const context = getAudioContext();
+  if (!context) {
+    return;
+  }
+
+  try {
+    await context.resume();
+    soundEnabled = context.state === "running";
+    updateSoundButton();
+
+    if (soundEnabled && playPreview) {
+      playChime([740, 988, 1244]);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function tryResumeAudio() {
+  const context = getAudioContext();
+  if (!context || context.state === "running") {
+    return;
+  }
+
+  context.resume().then(() => {
+    soundEnabled = context.state === "running";
+    updateSoundButton();
+  }).catch(() => {});
+}
+
+window.addEventListener("pointerdown", tryResumeAudio, { passive: true });
+window.addEventListener("keydown", tryResumeAudio);
+window.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    tryResumeAudio();
+  }
+});
+
+soundToggleBtn?.addEventListener("click", () => {
+  enableSound(true);
+});
 
 retryBtn?.addEventListener("click", () => {
   retryBtn.hidden = true;
+  retryBtn.textContent = "Try again";
   createTicket();
 });
 
+revokeBtn?.addEventListener("click", () => {
+  revokeTicket();
+});
+
+function saveCurrentTicketId(ticketId) {
+  window.localStorage.setItem(STORAGE_KEY, String(ticketId));
+}
+
+function loadStoredTicketId() {
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    window.localStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
+
+  return parsed;
+}
+
+function clearStoredTicketId() {
+  window.localStorage.removeItem(STORAGE_KEY);
+}
+
+function showEstimate(peopleAhead, estimatedWaitMinutes) {
+  estimateEl.hidden = false;
+  peopleAheadEl.textContent = String(peopleAhead);
+  waitTimeEl.textContent = `${estimatedWaitMinutes} min`;
+}
+
+function resetEstimate() {
+  estimateEl.hidden = true;
+  peopleAheadEl.textContent = "-";
+  waitTimeEl.textContent = "-";
+}
+
+function showRetry(message) {
+  statusEl.textContent = message;
+  retryBtn.textContent = "Get new ticket";
+  retryBtn.hidden = false;
+}
+
+async function updateEstimate() {
+  if (!currentTicketId) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/tickets/${currentTicketId}/estimate`);
+    if (!response.ok) {
+      throw new Error(`Estimate failed (${response.status})`);
+    }
+
+    const payload = await response.json();
+    showEstimate(payload.people_ahead, payload.estimated_wait_minutes);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function setActiveOpenTicket(ticket) {
+  currentTicketId = ticket.id;
+  saveCurrentTicketId(ticket.id);
+  hasNotified = false;
+
+  ticketNumberEl.textContent = ticket.number;
+  statusEl.textContent = "Ticket created. Please wait for an agent call.";
+  statusEl.classList.remove("ok");
+  retryBtn.hidden = true;
+  revokeBtn.hidden = false;
+}
+
+function clearActiveTicket() {
+  currentTicketId = null;
+  clearStoredTicketId();
+  revokeBtn.hidden = true;
+  resetEstimate();
+}
+
+async function restoreTicketOrCreate() {
+  const storedId = loadStoredTicketId();
+  if (!storedId) {
+    createTicket();
+    return;
+  }
+
+  currentTicketId = storedId;
+  statusEl.textContent = "Restoring your ticket...";
+  retryBtn.hidden = true;
+  revokeBtn.hidden = false;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/tickets/${storedId}`);
+    if (!response.ok) {
+      throw new Error(`Ticket restore failed (${response.status})`);
+    }
+
+    const payload = await response.json();
+    const ticket = payload.ticket;
+
+    if (ticket.status === "open") {
+      setActiveOpenTicket(ticket);
+      startPolling();
+      return;
+    }
+
+    clearActiveTicket();
+    ticketNumberEl.textContent = ticket.number;
+    statusEl.textContent = "This ticket is already closed. You can request a new one.";
+    showRetry(statusEl.textContent);
+  } catch (error) {
+    console.error(error);
+    clearActiveTicket();
+    showRetry("Could not restore previous ticket. You can request a new one.");
+  }
+}
+
 async function createTicket() {
+  if (currentTicketId) {
+    return;
+  }
+
   ticketNumberEl.textContent = "Creating ticket...";
   statusEl.textContent = "Contacting backend...";
   statusEl.classList.remove("ok");
+  resetEstimate();
+  revokeBtn.hidden = true;
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/tickets`, { method: "POST" });
@@ -52,38 +230,39 @@ async function createTicket() {
 
     const payload = await response.json();
     const ticket = payload.ticket;
-    currentTicketId = ticket.id;
-
-    ticketNumberEl.textContent = ticket.number;
-    statusEl.textContent = "Ticket created. Please wait for an agent call.";
+    setActiveOpenTicket(ticket);
+    updateEstimate();
     startPolling();
   } catch (error) {
     console.error(error);
-    statusEl.textContent = "Could not create your ticket. Please try again.";
-    retryBtn.hidden = false;
+    showRetry("Could not create your ticket. Please try again.");
   }
 }
 
-function beep(pattern = [220, 150, 280]) {
+function playChime(frequencies) {
   const context = getAudioContext();
-  if (!context) {
-    return;
+  if (!context || context.state !== "running") {
+    return false;
   }
 
-  let timeline = context.currentTime;
+  let timeline = context.currentTime + 0.02;
 
-  pattern.forEach((duration) => {
+  frequencies.forEach((frequency) => {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = 880;
-    gain.gain.value = 0.18;
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(frequency, timeline);
+    gain.gain.setValueAtTime(0.0001, timeline);
+    gain.gain.exponentialRampToValueAtTime(0.14, timeline + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, timeline + 0.36);
     oscillator.connect(gain);
     gain.connect(context.destination);
     oscillator.start(timeline);
-    oscillator.stop(timeline + duration / 1000);
-    timeline += duration / 1000 + 0.04;
+    oscillator.stop(timeline + 0.38);
+    timeline += 0.18;
   });
+
+  return true;
 }
 
 async function pollTicket() {
@@ -98,31 +277,93 @@ async function pollTicket() {
     }
 
     const payload = await response.json();
-    if (payload.ticket.status === "closed" && !hasNotified) {
-      hasNotified = true;
-      statusEl.textContent = "Agent is ready for you now. Please head in 🎉";
-      statusEl.classList.add("ok");
-      beep();
-      if ("vibrate" in navigator) {
-        navigator.vibrate([180, 80, 220]);
+    if (payload.ticket.status === "closed") {
+      if (!hasNotified && payload.ticket.closed_by === "agent") {
+        hasNotified = true;
+        statusEl.textContent = "Agent is ready for you now. Please head in 🎉";
+        statusEl.classList.add("ok");
+        const played = playChime([740, 988, 1244, 988]);
+        if (!played) {
+          statusEl.textContent = "Agent is ready for you now. Tap Enable sound for alerts.";
+          statusEl.classList.add("ok");
+        }
+        if ("vibrate" in navigator) {
+          navigator.vibrate([180, 80, 220]);
+        }
+      } else if (payload.ticket.closed_by === "user") {
+        statusEl.textContent = "Ticket revoked. You can request a new one.";
       }
+
+      clearActiveTicket();
+      showRetry(statusEl.textContent);
+      return;
     }
+
+    if (payload.ticket.number && ticketNumberEl.textContent !== payload.ticket.number) {
+      ticketNumberEl.textContent = payload.ticket.number;
+    }
+
+    if (!hasNotified) {
+      statusEl.textContent = "Ticket created. Please wait for an agent call.";
+      statusEl.classList.remove("ok");
+    }
+
+    updateEstimate();
   } catch (error) {
     console.error(error);
     statusEl.textContent = "Connection issue. Reconnecting...";
   }
 }
 
+async function revokeTicket() {
+  if (!currentTicketId) {
+    return;
+  }
+
+  revokeBtn.disabled = true;
+  revokeBtn.textContent = "Revoking...";
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/tickets/${currentTicketId}/revoke`, {
+      method: "POST"
+    });
+
+    if (!response.ok) {
+      throw new Error(`Revoke failed (${response.status})`);
+    }
+
+    clearActiveTicket();
+    statusEl.textContent = "Ticket revoked. You can request a new one.";
+    statusEl.classList.remove("ok");
+    showRetry(statusEl.textContent);
+  } catch (error) {
+    console.error(error);
+    statusEl.textContent = "Could not revoke ticket right now.";
+    revokeBtn.disabled = false;
+    revokeBtn.textContent = "Revoke Ticket";
+  }
+}
+
+function stopPolling() {
+  if (pollIntervalId) {
+    window.clearInterval(pollIntervalId);
+    pollIntervalId = null;
+  }
+}
+
 function startPolling() {
   hasNotified = false;
 
-  if (pollIntervalId) {
-    window.clearInterval(pollIntervalId);
-  }
-
+  stopPolling();
   pollTicket();
   pollIntervalId = window.setInterval(pollTicket, 2000);
 }
 
-createTicket();
+window.addEventListener("beforeunload", () => {
+  stopPolling();
+});
+
+resetEstimate();
+updateSoundButton();
+restoreTicketOrCreate();
 
