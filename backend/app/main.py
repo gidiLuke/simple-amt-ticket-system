@@ -44,7 +44,7 @@ def create_app(storage_file: Path | None = None) -> FastAPI:
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return {"status": "ok", "version": app.version}
 
     @app.post("/api/tickets", response_model=CreateTicketResponse)
     def create_ticket() -> CreateTicketResponse:

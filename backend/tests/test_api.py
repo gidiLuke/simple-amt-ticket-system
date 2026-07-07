@@ -10,6 +10,14 @@ def build_client(tmp_path: Path) -> TestClient:
     return TestClient(app)
 
 
+def test_health_includes_version(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "version": "1.0.0"}
+
+
 def test_ticket_creation_and_open_queue(tmp_path: Path) -> None:
     client = build_client(tmp_path)
     created = client.post("/api/tickets")
