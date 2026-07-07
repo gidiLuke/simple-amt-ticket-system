@@ -118,10 +118,9 @@ The Bash setup below is interactive. You can paste it into a PythonAnywhere Bash
 5. Open a Bash console in PythonAnywhere and run these commands exactly:
 
    ```bash
-  export PA_USERNAME=$(basename "$HOME")
-  export PA_PYTHON=/usr/bin/python3.13
-   read -rp "WSGI file [/var/www/${PA_USERNAME}_eu_pythonanywhere_com_wsgi.py]: " PA_WSGI_FILE
-  export PA_WSGI_FILE=${PA_WSGI_FILE:-/var/www/${PA_USERNAME}_eu_pythonanywhere_com_wsgi.py}
+   export PA_USERNAME=$(basename "$HOME")
+   export PA_PYTHON=/usr/bin/python3.13
+   export PA_WSGI_FILE=/var/www/${PA_USERNAME}_eu_pythonanywhere_com_wsgi.py
    cd ~
    if [ -d ~/simple-amt-ticket-system/.git ]; then
      git -C ~/simple-amt-ticket-system pull --ff-only origin main
@@ -136,7 +135,7 @@ The Bash setup below is interactive. You can paste it into a PythonAnywhere Bash
    python -c "import os; from pathlib import Path; username = os.environ['PA_USERNAME']; wsgi_path = Path(os.environ['PA_WSGI_FILE']); template = Path(f'/home/{username}/simple-amt-ticket-system/backend/deploy/pythonanywhere_wsgi.py'); wsgi_path.write_text(template.read_text().replace('<your-username>', username)); print(f'Updated {wsgi_path}')"
    ```
 
-   This block derives `PA_USERNAME` automatically from your home directory, so on PythonAnywhere it resolves from `/home/<username>`. It is safe to rerun: it updates an existing clone, reuses an existing virtualenv, reinstalls requirements, and rewrites the WSGI file.
+  This block derives `PA_USERNAME` automatically from your home directory, so on PythonAnywhere it resolves from `/home/<username>`. It sets `PA_WSGI_FILE` explicitly to the standard EU PythonAnywhere WSGI path on every run, which avoids stale shell values from previous attempts. If your WSGI file lives somewhere else, replace that one line before running the block. It is safe to rerun: it updates an existing clone, reuses an existing virtualenv, reinstalls requirements, and rewrites the WSGI file.
 
 6. In the PythonAnywhere Web tab, open the generated WSGI file and make sure it contains your username in the paths.
 7. Click `Reload` for the web app.
@@ -150,9 +149,8 @@ your PythonAnywhere domain
 When you change Python dependencies or want to update manually from a Bash console, run:
 
 ```bash
-  export PA_USERNAME=$(basename "$HOME")
-read -rp "WSGI file to touch [/var/www/${PA_USERNAME}_eu_pythonanywhere_com_wsgi.py]: " PA_WSGI_FILE
-  export PA_WSGI_FILE=${PA_WSGI_FILE:-/var/www/${PA_USERNAME}_eu_pythonanywhere_com_wsgi.py}
+export PA_USERNAME=$(basename "$HOME")
+export PA_WSGI_FILE=/var/www/${PA_USERNAME}_eu_pythonanywhere_com_wsgi.py
 cd ~/simple-amt-ticket-system
 git pull --ff-only origin main
 workon amt-tickets
