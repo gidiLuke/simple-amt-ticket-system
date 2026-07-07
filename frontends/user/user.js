@@ -2,6 +2,7 @@ const queryApi = new URLSearchParams(window.location.search).get("api");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const STORAGE_KEY = "amt_active_ticket_id";
+const SOUND_ENABLED_KEY = "amt_sound_enabled";
 
 const ticketNumberEl = document.getElementById("ticket-number");
 const statusEl = document.getElementById("status");
@@ -16,7 +17,7 @@ let currentTicketId = null;
 let hasNotified = false;
 let pollIntervalId = null;
 let audioCtx = null;
-let soundEnabled = false;
+let soundEnabled = window.localStorage.getItem(SOUND_ENABLED_KEY) === "true";
 
 function getAudioContext() {
   if (!AudioContextClass) {
@@ -39,18 +40,33 @@ function updateSoundButton() {
     return;
   }
 
-  soundToggleBtn.textContent = soundEnabled ? "Sound enabled" : "Enable sound";
+  soundToggleBtn.textContent = soundEnabled ? "Disable sound" : "Enable sound";
 }
 
-async function enableSound(playPreview = true) {
+async function setSoundEnabled(nextState, playPreview = false) {
+  soundEnabled = nextState;
+  window.localStorage.setItem(SOUND_ENABLED_KEY, String(soundEnabled));
+
+  if (!soundEnabled) {
+    updateSoundButton();
+    if (audioCtx && audioCtx.state === "running") {
+      audioCtx.suspend().catch(() => {});
+    }
+    return;
+  }
+
   const context = getAudioContext();
   if (!context) {
+    soundEnabled = false;
+    window.localStorage.setItem(SOUND_ENABLED_KEY, "false");
+    updateSoundButton();
     return;
   }
 
   try {
     await context.resume();
     soundEnabled = context.state === "running";
+    window.localStorage.setItem(SOUND_ENABLED_KEY, String(soundEnabled));
     updateSoundButton();
 
     if (soundEnabled && playPreview) {
@@ -62,6 +78,10 @@ async function enableSound(playPreview = true) {
 }
 
 function tryResumeAudio() {
+  if (!soundEnabled) {
+    return;
+  }
+
   const context = getAudioContext();
   if (!context || context.state === "running") {
     return;
@@ -82,7 +102,7 @@ window.addEventListener("visibilitychange", () => {
 });
 
 soundToggleBtn?.addEventListener("click", () => {
-  enableSound(true);
+  setSoundEnabled(!soundEnabled, !soundEnabled);
 });
 
 retryBtn?.addEventListener("click", () => {
@@ -132,8 +152,14 @@ function resetEstimate() {
 
 function showRetry(message) {
   statusEl.textContent = message;
+  retryBtn.disabled = false;
   retryBtn.textContent = "Get new ticket";
   retryBtn.hidden = false;
+}
+
+function resetRevokeButtonState() {
+  revokeBtn.disabled = false;
+  revokeBtn.textContent = "Revoke Ticket";
 }
 
 async function updateEstimate() {
@@ -163,12 +189,14 @@ function setActiveOpenTicket(ticket) {
   statusEl.textContent = "Ticket created. Please wait for an agent call.";
   statusEl.classList.remove("ok");
   retryBtn.hidden = true;
+  resetRevokeButtonState();
   revokeBtn.hidden = false;
 }
 
 function clearActiveTicket() {
   currentTicketId = null;
   clearStoredTicketId();
+  resetRevokeButtonState();
   revokeBtn.hidden = true;
   resetEstimate();
 }
@@ -220,6 +248,7 @@ async function createTicket() {
   statusEl.textContent = "Contacting backend...";
   statusEl.classList.remove("ok");
   resetEstimate();
+  resetRevokeButtonState();
   revokeBtn.hidden = true;
 
   try {
@@ -240,6 +269,10 @@ async function createTicket() {
 }
 
 function playChime(frequencies) {
+  if (!soundEnabled) {
+    return false;
+  }
+
   const context = getAudioContext();
   if (!context || context.state !== "running") {
     return false;
