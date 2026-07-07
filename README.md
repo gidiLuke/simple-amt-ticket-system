@@ -1,5 +1,7 @@
 # 🎟️ Simple AMT Ticket System
 
+This is a project for office fun, 100% vibe coded.
+
 Welcome to a tiny-but-mighty office queue system:
 
 - 📱 **User scans QR code** at the door
