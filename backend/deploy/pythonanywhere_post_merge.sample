@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+touch /var/www/<your-username>_pythonanywhere_com_wsgi.py

@@ -101,34 +101,84 @@ After deploy:
 
 ## Backend → PythonAnywhere (Free Tier)
 
+Replace the placeholders in this section before running any commands:
+
+- `<pa-username>`: your PythonAnywhere username
+- `<pa-domain>`: your full PythonAnywhere domain, for example `<pa-username>.eu.pythonanywhere.com`
+- `<pa-python>`: the Python binary available on your account, for example `/usr/bin/python3.10`
+
 ### One-time setup on PythonAnywhere
 
-1. Create a web app (manual configuration, Python 3.10+).
-2. Clone this repo into home folder:
+1. In the PythonAnywhere Web tab, create a new web app for `<pa-domain>`.
+2. Choose `Manual configuration`.
+3. Pick a Python version that matches your account options, ideally Python `3.10` or newer.
+4. Open a Bash console in PythonAnywhere and run these commands exactly:
+
    ```bash
-   git clone <your-repo-url> ~/simple-amt-ticket-system
-   ```
-3. Create virtualenv:
-   ```bash
-   mkvirtualenv --python=/usr/bin/python3.10 amt-tickets
+   cd ~
+   git clone https://github.com/gidiLuke/simple-amt-ticket-system.git
+   mkvirtualenv --python=<pa-python> amt-tickets
+   workon amt-tickets
    pip install -r ~/simple-amt-ticket-system/backend/requirements.txt
+   cp ~/simple-amt-ticket-system/backend/deploy/pythonanywhere_post_merge.sample ~/simple-amt-ticket-system/.git/hooks/post-merge
+   sed -i 's/<your-username>/<pa-username>/g' ~/simple-amt-ticket-system/.git/hooks/post-merge
+   chmod +x ~/simple-amt-ticket-system/.git/hooks/post-merge
+   python - <<'PY'
+   from pathlib import Path
+   username = '<pa-username>'
+   wsgi_path = Path(f'/var/www/{username}_eu_pythonanywhere_com_wsgi.py')
+   template = Path(f'/home/{username}/simple-amt-ticket-system/backend/deploy/pythonanywhere_wsgi.py')
+   wsgi_path.write_text(template.read_text().replace('<your-username>', username))
+   print(f'Updated {wsgi_path}')
+   PY
    ```
-4. Update your WSGI file with template from:
-   `backend/deploy/pythonanywhere_wsgi.py`
-5. Reload web app.
 
-### Optional CI/CD deploy via GitHub Actions
+5. In the PythonAnywhere Web tab, open the generated WSGI file in `/var/www/` and make sure it contains your `<pa-username>` in the paths.
+6. In the PythonAnywhere Web tab, add an environment variable named `GITHUB_WEBHOOK_SECRET` with a long random value.
+7. Click `Reload` for the web app.
 
-Workflow: `.github/workflows/deploy-backend-pythonanywhere.yml`
+After that, your backend should be served from:
 
-Configure secrets:
+`https://<pa-domain>`
 
-- `PA_SSH_HOST` (e.g. `ssh.pythonanywhere.com`)
-- `PA_SSH_USER`
-- `PA_SSH_KEY` (private key)
-- `PA_WSGI_FILE` (absolute path to WSGI config file)
+### Later updates on PythonAnywhere
 
-On push to `main`, workflow SSHes into PythonAnywhere, pulls latest code, installs deps, and reloads app.
+When you change Python dependencies or want to update manually from a Bash console, run:
+
+```bash
+cd ~/simple-amt-ticket-system
+git pull --ff-only origin main
+workon amt-tickets
+pip install -r ~/simple-amt-ticket-system/backend/requirements.txt
+touch /var/www/<pa-username>_eu_pythonanywhere_com_wsgi.py
+```
+
+### Optional auto-update via GitHub webhook
+
+This project includes a webhook endpoint at `/api/deploy/github` that can pull new code directly from GitHub on PythonAnywhere free accounts.
+
+On GitHub:
+
+1. Open your repository settings.
+2. Go to Webhooks.
+3. Add a webhook with:
+   - Payload URL: `https://<your-pythonanywhere-domain>/api/deploy/github`
+   - Content type: `application/json`
+   - Secret: the same value as `GITHUB_WEBHOOK_SECRET`
+   - Events: `Just the push event`
+
+Behavior:
+
+- Only signed GitHub requests are accepted.
+- Only pushes to `main` are applied.
+- The app runs `git pull --ff-only origin main` inside the cloned repo.
+- The `post-merge` hook touches the WSGI file so PythonAnywhere reloads the app.
+
+Notes:
+
+- This works best when the GitHub repo is public, which matches PythonAnywhere free-tier usage.
+- If you change Python dependencies, you still need to run `pip install -r ~/simple-amt-ticket-system/backend/requirements.txt` in a PythonAnywhere Bash console.
+- The GitHub Actions workflow in `.github/workflows/deploy-backend-pythonanywhere.yml` is left as manual-only because the SSH-based deploy path requires a paid PythonAnywhere account.
 
 ---
 

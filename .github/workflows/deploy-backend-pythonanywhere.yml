@@ -1,11 +1,6 @@
 name: Deploy Backend to PythonAnywhere
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "backend/**"
-      - ".github/workflows/deploy-backend-pythonanywhere.yml"
   workflow_dispatch:
 
 jobs:
@@ -15,17 +10,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy using SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host: ${{ secrets.PA_SSH_HOST }}
-          username: ${{ secrets.PA_SSH_USER }}
-          key: ${{ secrets.PA_SSH_KEY }}
-          script: |
-            set -e
-            cd ~/simple-amt-ticket-system
-            git fetch origin main
-            git reset --hard origin/main
-            ~/.virtualenvs/amt-tickets/bin/pip install -r backend/requirements.txt
-            touch ${{ secrets.PA_WSGI_FILE }}
+          ssh-private-key: ${{ secrets.PA_SSH_KEY }}
+
+      - name: Add PythonAnywhere host key
+        run: ssh-keyscan -H ${{ secrets.PA_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync backend files
+        run: |
+          rsync -avz --delete \
+            backend/ \
+            ${{ secrets.PA_SSH_USER }}@${{ secrets.PA_SSH_HOST }}:~/simple-amt-ticket-system/backend/
+
+      - name: Reload web app
+        env:
+          PA_API_TOKEN: ${{ secrets.PA_API_TOKEN }}
+          PA_API_HOST: ${{ secrets.PA_SSH_HOST }}
+          PA_USERNAME: ${{ secrets.PA_SSH_USER }}
+          PA_WSGI_FILE: ${{ secrets.PA_WSGI_FILE }}
+        run: |
+          set -euo pipefail
+          api_host="${PA_API_HOST#ssh.}"
+          webapp_domain="$(basename "$PA_WSGI_FILE" | sed 's/_wsgi\.py$//' | tr '_' '.')"
+
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Token ${PA_API_TOKEN}" \
+            "https://${api_host}/api/v0/user/${PA_USERNAME}/webapps/${webapp_domain}/reload/"
 
