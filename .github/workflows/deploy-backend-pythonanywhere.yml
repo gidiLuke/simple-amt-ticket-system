@@ -9,7 +9,29 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install backend test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Run backend tests
+        run: |
+          set -euo pipefail
+          pytest -q backend/tests
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
