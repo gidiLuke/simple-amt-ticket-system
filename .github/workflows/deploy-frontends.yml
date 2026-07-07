@@ -27,6 +27,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Configure frontend API URL
+        env:
+          FRONTEND_API_BASE_URL: ${{ vars.FRONTEND_API_BASE_URL || secrets.FRONTEND_API_BASE_URL }}
+          PA_WEBAPP_DOMAIN: ${{ vars.PA_WEBAPP_DOMAIN || secrets.PA_WEBAPP_DOMAIN }}
+        run: |
+          set -euo pipefail
+
+          api_url="${FRONTEND_API_BASE_URL:-}"
+          if [[ -z "$api_url" && -n "${PA_WEBAPP_DOMAIN:-}" ]]; then
+            api_url="https://${PA_WEBAPP_DOMAIN}"
+          fi
+
+          if [[ -z "$api_url" ]]; then
+            echo "::error title=Missing frontend API configuration::Set FRONTEND_API_BASE_URL (variable/secret) or PA_WEBAPP_DOMAIN (variable/secret)."
+            exit 1
+          fi
+
+          cat > frontends/config.js <<EOF
+          window.APP_CONFIG = window.APP_CONFIG || {
+            API_BASE_URL: "${api_url}"
+          };
+          EOF
+
+          echo "Configured frontends/config.js with API_BASE_URL=${api_url}"
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

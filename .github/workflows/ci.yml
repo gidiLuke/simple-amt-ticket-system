@@ -3,6 +3,9 @@ name: CI
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "backend/**"
+      - ".github/workflows/deploy-backend-pythonanywhere.yml"
   pull_request:
 
 jobs:
