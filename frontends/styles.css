@@ -208,6 +208,20 @@ button:disabled {
   border-bottom-color: rgba(176, 0, 17, 0.45);
 }
 
+.footnote {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.footnote a {
+  color: inherit;
+}
+
+.footnote a:hover {
+  color: var(--accent-2);
+}
+
 @media (max-width: 640px) {
   .legal {
     margin: -30px auto 20px;
