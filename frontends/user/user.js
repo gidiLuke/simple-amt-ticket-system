@@ -12,10 +12,15 @@ const imprintLinkEl = document.getElementById("imprint-link");
 const estimateEl = document.getElementById("estimate");
 const peopleAheadEl = document.getElementById("people-ahead");
 const waitTimeEl = document.getElementById("wait-time");
+const callAlertEl = document.getElementById("call-alert");
+const callAlertDismissEl = document.getElementById("call-alert-dismiss");
+const PAGE_TITLE_DEFAULT = document.title;
 
 let currentTicketId = null;
 let hasNotified = false;
 let pollIntervalId = null;
+let titleAlertIntervalId = null;
+let fallbackAlertIntervalId = null;
 let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
 
 function supportsNotifications() {
@@ -59,6 +64,7 @@ async function showBrowserNotification(title, body, tag) {
     body,
     tag,
     renotify: true,
+    requireInteraction: true,
   };
 
   try {
@@ -75,6 +81,131 @@ async function showBrowserNotification(title, body, tag) {
   } catch (error) {
     console.error(error);
     return false;
+  }
+}
+
+function startTitleAlert(ticketNumber) {
+  if (titleAlertIntervalId) {
+    return;
+  }
+
+  const calledTitle = `${ticketNumber} called - please enter`;
+  let showCalledTitle = true;
+  document.title = calledTitle;
+
+  titleAlertIntervalId = window.setInterval(() => {
+    document.title = showCalledTitle ? calledTitle : PAGE_TITLE_DEFAULT;
+    showCalledTitle = !showCalledTitle;
+  }, 1200);
+}
+
+function stopTitleAlert() {
+  if (!titleAlertIntervalId) {
+    document.title = PAGE_TITLE_DEFAULT;
+    return;
+  }
+
+  window.clearInterval(titleAlertIntervalId);
+  titleAlertIntervalId = null;
+  document.title = PAGE_TITLE_DEFAULT;
+}
+
+function playAlertTone() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      return;
+    }
+
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const first = ctx.createOscillator();
+    const second = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    first.type = "sine";
+    first.frequency.value = 880;
+    second.type = "sine";
+    second.frequency.value = 1175;
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.09, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+    first.connect(gain);
+    second.connect(gain);
+    gain.connect(ctx.destination);
+
+    first.start(now);
+    second.start(now + 0.25);
+    first.stop(now + 0.35);
+    second.stop(now + 0.6);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function startFallbackAlertLoop() {
+  if (fallbackAlertIntervalId) {
+    return;
+  }
+
+  fallbackAlertIntervalId = window.setInterval(() => {
+    playAlertTone();
+    if ("vibrate" in navigator) {
+      navigator.vibrate([140, 70, 180]);
+    }
+  }, 3200);
+}
+
+function stopFallbackAlertLoop() {
+  if (!fallbackAlertIntervalId) {
+    return;
+  }
+
+  window.clearInterval(fallbackAlertIntervalId);
+  fallbackAlertIntervalId = null;
+}
+
+function showCalledBanner(ticketNumber) {
+  if (!callAlertEl) {
+    return;
+  }
+
+  const titleEl = callAlertEl.querySelector(".call-alert-title");
+  if (titleEl) {
+    titleEl.textContent = `Now serving ${ticketNumber}`;
+  }
+  callAlertEl.hidden = false;
+}
+
+function hideCalledBanner() {
+  if (!callAlertEl) {
+    return;
+  }
+  callAlertEl.hidden = true;
+}
+
+async function triggerTicketCalledAlert(ticket) {
+  startTitleAlert(ticket.number);
+  showCalledBanner(ticket.number);
+  startFallbackAlertLoop();
+
+  if ("vibrate" in navigator) {
+    navigator.vibrate([180, 80, 220, 120, 250]);
+  }
+
+  playAlertTone();
+
+  const notificationSent = await showBrowserNotification(
+    "Your ticket is called",
+    `${ticket.number} is ready. Please head in now.`,
+    `amt-ticket-${ticket.id}`
+  );
+
+  if (!notificationSent && notificationToggleEl && notificationsEnabled) {
+    notificationToggleEl.textContent = "Alerts limited";
+    notificationToggleEl.title = "System notifications are limited on this browser. Keep this page visible for in-page alerts.";
   }
 }
 
@@ -219,6 +350,9 @@ function clearActiveTicket() {
   resetRevokeButtonState();
   revokeBtn.hidden = true;
   resetEstimate();
+  hideCalledBanner();
+  stopFallbackAlertLoop();
+  stopTitleAlert();
 }
 
 async function restoreTicketOrCreate() {
@@ -305,16 +439,12 @@ async function pollTicket() {
         hasNotified = true;
         statusEl.textContent = "Your ticket has been called. Please head to the desk now.";
         statusEl.classList.add("ok");
-        if ("vibrate" in navigator) {
-          navigator.vibrate([180, 80, 220]);
-        }
-        showBrowserNotification(
-          "Your ticket is called",
-          `${payload.ticket.number} is ready. Please head in now.`,
-          `amt-ticket-${payload.ticket.id}`
-        );
+        await triggerTicketCalledAlert(payload.ticket);
       } else if (payload.ticket.closed_by === "user") {
         statusEl.textContent = "Ticket revoked. You can request a new one.";
+        hideCalledBanner();
+        stopFallbackAlertLoop();
+        stopTitleAlert();
       }
 
       clearActiveTicket();
@@ -384,6 +514,20 @@ function startPolling() {
 
 window.addEventListener("beforeunload", () => {
   stopPolling();
+  stopFallbackAlertLoop();
+  stopTitleAlert();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && currentTicketId) {
+    pollTicket();
+  }
+});
+
+callAlertDismissEl?.addEventListener("click", () => {
+  hideCalledBanner();
+  stopFallbackAlertLoop();
+  stopTitleAlert();
 });
 
 resetEstimate();

@@ -68,6 +68,26 @@ body {
   gap: 12px;
 }
 
+.call-alert {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(234, 0, 22, 0.38);
+  background: linear-gradient(120deg, rgba(234, 0, 22, 0.08), rgba(255, 255, 255, 0.95));
+}
+
+.call-alert-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent-2);
+}
+
+.call-alert-body {
+  margin: 4px 0 10px;
+  color: var(--text);
+}
+
 .estimate-grid {
   display: grid;
   gap: 10px;
