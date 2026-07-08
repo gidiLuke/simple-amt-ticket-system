@@ -1,10 +1,106 @@
 const queryApi = new URLSearchParams(window.location.search).get("api");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
+const NOTIFICATION_ENABLED_KEY = "amt_agent_notifications_enabled";
 
 const ticketsEl = document.getElementById("tickets");
 const badgeEl = document.getElementById("agent-badge");
+const notificationToggleEl = document.getElementById("notification-toggle");
 const imprintLinkEl = document.getElementById("imprint-link");
 let seenTicketIds = new Set();
+let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
+
+function supportsNotifications() {
+  return typeof window !== "undefined" && "Notification" in window;
+}
+
+function updateNotificationToggle() {
+  if (!notificationToggleEl) {
+    return;
+  }
+
+  if (!supportsNotifications()) {
+    notificationToggleEl.hidden = true;
+    return;
+  }
+
+  notificationToggleEl.hidden = false;
+
+  if (Notification.permission === "denied") {
+    notificationsEnabled = false;
+    window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, "false");
+    notificationToggleEl.disabled = true;
+    notificationToggleEl.title = "Blocked in browser settings";
+    notificationToggleEl.textContent = "Alerts unavailable";
+    notificationToggleEl.setAttribute("aria-pressed", "false");
+    return;
+  }
+
+  notificationToggleEl.disabled = false;
+  notificationToggleEl.title = "";
+  notificationToggleEl.textContent = notificationsEnabled ? "Alerts on" : "Alerts off";
+  notificationToggleEl.setAttribute("aria-pressed", String(notificationsEnabled));
+}
+
+async function showBrowserNotification(title, body, tag) {
+  if (!supportsNotifications() || !notificationsEnabled || Notification.permission !== "granted") {
+    return false;
+  }
+
+  const options = {
+    body,
+    tag,
+    renotify: true,
+  };
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        await registration.showNotification(title, options);
+        return true;
+      }
+    }
+
+    new Notification(title, options);
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+}
+
+async function setNotificationsEnabled(nextState, showPreview = false) {
+  if (!supportsNotifications()) {
+    notificationsEnabled = false;
+    updateNotificationToggle();
+    return;
+  }
+
+  if (!nextState) {
+    notificationsEnabled = false;
+    window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, "false");
+    updateNotificationToggle();
+    return;
+  }
+
+  let permission = Notification.permission;
+  if (permission === "default") {
+    permission = await Notification.requestPermission();
+  }
+
+  notificationsEnabled = permission === "granted";
+  window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, String(notificationsEnabled));
+  updateNotificationToggle();
+
+  if (notificationsEnabled && showPreview) {
+    await showBrowserNotification("Agent alerts enabled", "You will now receive new-ticket alerts.", "amt-agent-notify-enabled");
+  }
+}
+
+notificationToggleEl?.addEventListener("click", () => {
+  const nextState = !notificationsEnabled;
+  setNotificationsEnabled(nextState, nextState);
+});
 
 function applyImprintLink() {
   if (!imprintLinkEl) {
@@ -90,6 +186,7 @@ async function loadTickets() {
 
     if (hasNewTicket && seenTicketIds.size > 0) {
       badgeEl.textContent = "New ticket arrived 🔔";
+      showBrowserNotification("New ticket in queue", `${tickets.length} open ticket${tickets.length === 1 ? "" : "s"} in queue.`, "amt-agent-new-ticket");
     } else {
       badgeEl.textContent = `Open tickets: ${tickets.length}`;
     }
@@ -105,4 +202,8 @@ async function loadTickets() {
 loadTickets();
 window.setInterval(loadTickets, 2000);
 applyImprintLink();
+updateNotificationToggle();
+if (notificationsEnabled && supportsNotifications() && Notification.permission === "default") {
+  setNotificationsEnabled(true, false);
+}
 

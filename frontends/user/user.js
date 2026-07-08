@@ -8,7 +8,6 @@ const statusEl = document.getElementById("status");
 const retryBtn = document.getElementById("retry");
 const revokeBtn = document.getElementById("revoke");
 const notificationToggleEl = document.getElementById("notification-toggle");
-const notificationRowEl = document.getElementById("notification-row");
 const imprintLinkEl = document.getElementById("imprint-link");
 const estimateEl = document.getElementById("estimate");
 const peopleAheadEl = document.getElementById("people-ahead");
@@ -29,28 +28,26 @@ function updateNotificationToggle() {
   }
 
   if (!supportsNotifications()) {
-    if (notificationRowEl) {
-      notificationRowEl.hidden = true;
-    }
+    notificationToggleEl.hidden = true;
     return;
   }
 
-  if (notificationRowEl) {
-    notificationRowEl.hidden = false;
-  }
+  notificationToggleEl.hidden = false;
 
   if (Notification.permission === "denied") {
     notificationsEnabled = false;
     window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, "false");
-    notificationToggleEl.checked = false;
     notificationToggleEl.disabled = true;
     notificationToggleEl.title = "Blocked in browser settings";
+    notificationToggleEl.textContent = "Alerts unavailable";
+    notificationToggleEl.setAttribute("aria-pressed", "false");
     return;
   }
 
   notificationToggleEl.disabled = false;
   notificationToggleEl.title = "";
-  notificationToggleEl.checked = notificationsEnabled;
+  notificationToggleEl.textContent = notificationsEnabled ? "Alerts on" : "Alerts off";
+  notificationToggleEl.setAttribute("aria-pressed", String(notificationsEnabled));
 }
 
 async function showBrowserNotification(title, body, tag) {
@@ -108,8 +105,9 @@ async function setNotificationsEnabled(nextState, showPreview = false) {
     await showBrowserNotification("Notifications enabled", "You will now receive ticket-call notifications.", "amt-notify-enabled");
   }
 }
-notificationToggleEl?.addEventListener("change", () => {
-  setNotificationsEnabled(Boolean(notificationToggleEl.checked), Boolean(notificationToggleEl.checked));
+notificationToggleEl?.addEventListener("click", () => {
+  const nextState = !notificationsEnabled;
+  setNotificationsEnabled(nextState, nextState);
 });
 
 retryBtn?.addEventListener("click", () => {
@@ -208,7 +206,7 @@ function setActiveOpenTicket(ticket) {
   hasNotified = false;
 
   ticketNumberEl.textContent = ticket.number;
-  statusEl.textContent = "Ticket created. Please wait for an agent call.";
+  statusEl.textContent = "Your ticket is active. We will call you shortly.";
   statusEl.classList.remove("ok");
   retryBtn.hidden = true;
   resetRevokeButtonState();
@@ -252,7 +250,7 @@ async function restoreTicketOrCreate() {
 
     clearActiveTicket();
     ticketNumberEl.textContent = ticket.number;
-    statusEl.textContent = "This ticket is already closed. You can request a new one.";
+    statusEl.textContent = "This ticket has already been closed. You can request a new one.";
     showRetry(statusEl.textContent);
   } catch (error) {
     console.error(error);
@@ -267,7 +265,7 @@ async function createTicket() {
   }
 
   ticketNumberEl.textContent = "Creating ticket...";
-  statusEl.textContent = "Contacting backend...";
+  statusEl.textContent = "Connecting to the queue service...";
   statusEl.classList.remove("ok");
   resetEstimate();
   resetRevokeButtonState();
@@ -305,7 +303,7 @@ async function pollTicket() {
     if (payload.ticket.status === "closed") {
       if (!hasNotified && payload.ticket.closed_by === "agent") {
         hasNotified = true;
-        statusEl.textContent = "Agent is ready for you now. Please head in 🎉";
+        statusEl.textContent = "Your ticket has been called. Please head to the desk now.";
         statusEl.classList.add("ok");
         if ("vibrate" in navigator) {
           navigator.vibrate([180, 80, 220]);
@@ -329,7 +327,7 @@ async function pollTicket() {
     }
 
     if (!hasNotified) {
-      statusEl.textContent = "Ticket created. Please wait for an agent call.";
+      statusEl.textContent = "Your ticket is active. We will call you shortly.";
       statusEl.classList.remove("ok");
     }
 

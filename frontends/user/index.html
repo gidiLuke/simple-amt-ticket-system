@@ -9,8 +9,11 @@
   <body>
     <main class="shell">
       <section class="glass hero">
-        <h1 class="headline">Welcome 👋 Your queue ticket is being created...</h1>
-        <p class="sub">Hold tight. As soon as an agent calls your ticket, this screen will ring.</p>
+        <div class="hero-top-row">
+          <h1 class="headline">Welcome. We are creating your queue ticket.</h1>
+          <button id="notification-toggle" class="notify-chip" type="button" hidden></button>
+        </div>
+        <p class="sub">Please keep this screen open. You will be alerted here as soon as an agent calls your ticket.</p>
 
         <div class="ticket-display">
           <div id="ticket-number" class="ticket-pill">Creating ticket...</div>
@@ -32,12 +35,6 @@
     </main>
 
     <footer class="legal">
-      <div id="notification-row" class="notification-toggle-row">
-        <label class="notification-label" for="notification-toggle">
-          <input id="notification-toggle" type="checkbox" />
-          <span>Notifications</span>
-        </label>
-      </div>
       <a id="imprint-link" class="imprint-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Imprint</a>
       <p class="footnote">
         Built with little love and mostly AI.

@@ -9,8 +9,11 @@
   <body>
     <main class="shell">
       <section class="glass hero">
-        <h1 class="headline">Agent Ticket Console</h1>
-        <p class="sub">Live queue for front-door QR scans.</p>
+        <div class="hero-top-row">
+          <h1 class="headline">Agent Ticket Console</h1>
+          <button id="notification-toggle" class="notify-chip" type="button" hidden></button>
+        </div>
+        <p class="sub">Live queue for incoming front-desk QR tickets.</p>
         <span id="agent-badge" class="badge">Listening for new tickets...</span>
       </section>
 
