@@ -6,9 +6,25 @@ const SOUND_ENABLED_KEY = "amt_sound_enabled";
 const ticketsEl = document.getElementById("tickets");
 const badgeEl = document.getElementById("agent-badge");
 const soundToggleBtn = document.getElementById("sound-toggle");
+const imprintLinkEl = document.getElementById("imprint-link");
 let seenTicketIds = new Set();
 let audioCtx = null;
 let soundEnabled = window.localStorage.getItem(SOUND_ENABLED_KEY) === "true";
+
+function applyImprintLink() {
+  if (!imprintLinkEl) {
+    return;
+  }
+
+  const configured = (window.APP_CONFIG?.IMPRINT_URL || "").trim();
+  if (!configured) {
+    imprintLinkEl.hidden = true;
+    return;
+  }
+
+  imprintLinkEl.href = configured;
+  imprintLinkEl.hidden = false;
+}
 
 function getAudioContext() {
   if (!AudioContextClass) {
@@ -212,4 +228,5 @@ async function loadTickets() {
 loadTickets();
 window.setInterval(loadTickets, 2000);
 updateSoundButton();
+applyImprintLink();
 

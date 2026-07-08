@@ -189,7 +189,31 @@ button:disabled {
   background: rgba(234, 0, 22, 0.06);
 }
 
+.legal {
+  max-width: 920px;
+  margin: -36px auto 24px;
+  padding: 0 18px;
+  text-align: right;
+}
+
+.imprint-link {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(17, 26, 46, 0.2);
+}
+
+.imprint-link:hover {
+  color: var(--accent-2);
+  border-bottom-color: rgba(176, 0, 17, 0.45);
+}
+
 @media (max-width: 640px) {
+  .legal {
+    margin: -30px auto 20px;
+    text-align: left;
+  }
+
   .estimate-grid {
     grid-template-columns: 1fr;
   }

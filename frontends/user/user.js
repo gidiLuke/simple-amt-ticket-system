@@ -9,6 +9,7 @@ const statusEl = document.getElementById("status");
 const retryBtn = document.getElementById("retry");
 const revokeBtn = document.getElementById("revoke");
 const soundToggleBtn = document.getElementById("sound-toggle");
+const imprintLinkEl = document.getElementById("imprint-link");
 const estimateEl = document.getElementById("estimate");
 const peopleAheadEl = document.getElementById("people-ahead");
 const waitTimeEl = document.getElementById("wait-time");
@@ -136,6 +137,21 @@ function loadStoredTicketId() {
 
 function clearStoredTicketId() {
   window.localStorage.removeItem(STORAGE_KEY);
+}
+
+function applyImprintLink() {
+  if (!imprintLinkEl) {
+    return;
+  }
+
+  const configured = (window.APP_CONFIG?.IMPRINT_URL || "").trim();
+  if (!configured) {
+    imprintLinkEl.hidden = true;
+    return;
+  }
+
+  imprintLinkEl.href = configured;
+  imprintLinkEl.hidden = false;
 }
 
 function showEstimate(peopleAhead, estimatedWaitMinutes) {
@@ -398,5 +414,6 @@ window.addEventListener("beforeunload", () => {
 
 resetEstimate();
 updateSoundButton();
+applyImprintLink();
 restoreTicketOrCreate();
 
