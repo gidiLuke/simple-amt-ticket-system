@@ -3,12 +3,14 @@ const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://loca
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const STORAGE_KEY = "amt_active_ticket_id";
 const SOUND_ENABLED_KEY = "amt_sound_enabled";
+const NOTIFICATION_ENABLED_KEY = "amt_notifications_enabled";
 
 const ticketNumberEl = document.getElementById("ticket-number");
 const statusEl = document.getElementById("status");
 const retryBtn = document.getElementById("retry");
 const revokeBtn = document.getElementById("revoke");
 const soundToggleBtn = document.getElementById("sound-toggle");
+const notificationToggleBtn = document.getElementById("notification-toggle");
 const imprintLinkEl = document.getElementById("imprint-link");
 const estimateEl = document.getElementById("estimate");
 const peopleAheadEl = document.getElementById("people-ahead");
@@ -19,6 +21,89 @@ let hasNotified = false;
 let pollIntervalId = null;
 let audioCtx = null;
 let soundEnabled = window.localStorage.getItem(SOUND_ENABLED_KEY) === "true";
+let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) === "true";
+
+function supportsNotifications() {
+  return typeof window !== "undefined" && "Notification" in window;
+}
+
+function updateNotificationButton() {
+  if (!notificationToggleBtn) {
+    return;
+  }
+
+  if (!supportsNotifications()) {
+    notificationToggleBtn.hidden = true;
+    return;
+  }
+
+  notificationToggleBtn.hidden = false;
+
+  if (Notification.permission === "denied") {
+    notificationToggleBtn.disabled = true;
+    notificationToggleBtn.textContent = "Notifications blocked";
+    return;
+  }
+
+  notificationToggleBtn.disabled = false;
+  notificationToggleBtn.textContent = notificationsEnabled ? "Disable notifications" : "Enable notifications";
+}
+
+async function showBrowserNotification(title, body, tag) {
+  if (!supportsNotifications() || !notificationsEnabled || Notification.permission !== "granted") {
+    return false;
+  }
+
+  const options = {
+    body,
+    tag,
+    renotify: true,
+  };
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        await registration.showNotification(title, options);
+        return true;
+      }
+    }
+
+    new Notification(title, options);
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+}
+
+async function setNotificationsEnabled(nextState, showPreview = false) {
+  if (!supportsNotifications()) {
+    notificationsEnabled = false;
+    updateNotificationButton();
+    return;
+  }
+
+  if (!nextState) {
+    notificationsEnabled = false;
+    window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, "false");
+    updateNotificationButton();
+    return;
+  }
+
+  let permission = Notification.permission;
+  if (permission === "default") {
+    permission = await Notification.requestPermission();
+  }
+
+  notificationsEnabled = permission === "granted";
+  window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, String(notificationsEnabled));
+  updateNotificationButton();
+
+  if (notificationsEnabled && showPreview) {
+    await showBrowserNotification("Notifications enabled", "You will now receive ticket-call notifications.", "amt-notify-enabled");
+  }
+}
 
 function getAudioContext() {
   if (!AudioContextClass) {
@@ -104,6 +189,10 @@ window.addEventListener("visibilitychange", () => {
 
 soundToggleBtn?.addEventListener("click", () => {
   setSoundEnabled(!soundEnabled, !soundEnabled);
+});
+
+notificationToggleBtn?.addEventListener("click", () => {
+  setNotificationsEnabled(!notificationsEnabled, !notificationsEnabled);
 });
 
 retryBtn?.addEventListener("click", () => {
@@ -339,6 +428,11 @@ async function pollTicket() {
         if ("vibrate" in navigator) {
           navigator.vibrate([180, 80, 220]);
         }
+        showBrowserNotification(
+          "Your ticket is called",
+          `${payload.ticket.number} is ready. Please head in now.`,
+          `amt-ticket-${payload.ticket.id}`
+        );
       } else if (payload.ticket.closed_by === "user") {
         statusEl.textContent = "Ticket revoked. You can request a new one.";
       }
@@ -414,6 +508,7 @@ window.addEventListener("beforeunload", () => {
 
 resetEstimate();
 updateSoundButton();
+updateNotificationButton();
 applyImprintLink();
 restoreTicketOrCreate();
 
