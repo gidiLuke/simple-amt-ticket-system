@@ -168,10 +168,6 @@ button:disabled {
   box-shadow: none;
 }
 
-.sound-toggle {
-  width: fit-content;
-}
-
 .empty {
   padding: 18px;
   color: var(--muted);
@@ -194,6 +190,22 @@ button:disabled {
   margin: -36px auto 24px;
   padding: 0 18px;
   text-align: right;
+}
+
+.notification-toggle-row {
+  margin: 0 0 8px;
+}
+
+.notification-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.notification-label input {
+  accent-color: var(--accent);
 }
 
 .imprint-link {

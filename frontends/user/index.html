@@ -15,8 +15,6 @@
         <div class="ticket-display">
           <div id="ticket-number" class="ticket-pill">Creating ticket...</div>
           <p id="status" class="status">Connecting to queue service...</p>
-          <button id="sound-toggle" class="secondary sound-toggle">Enable sound</button>
-          <button id="notification-toggle" class="secondary sound-toggle">Enable notifications</button>
           <div class="estimate-grid" id="estimate" hidden>
             <div class="estimate-card">
               <div class="estimate-label">People Ahead</div>
@@ -34,6 +32,12 @@
     </main>
 
     <footer class="legal">
+      <div id="notification-row" class="notification-toggle-row">
+        <label class="notification-label" for="notification-toggle">
+          <input id="notification-toggle" type="checkbox" />
+          <span>Notifications</span>
+        </label>
+      </div>
       <a id="imprint-link" class="imprint-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Imprint</a>
       <p class="footnote">
         Built with little love and mostly AI.

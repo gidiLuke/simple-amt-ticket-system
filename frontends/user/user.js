@@ -1,16 +1,14 @@
 const queryApi = new URLSearchParams(window.location.search).get("api");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
-const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const STORAGE_KEY = "amt_active_ticket_id";
-const SOUND_ENABLED_KEY = "amt_sound_enabled";
 const NOTIFICATION_ENABLED_KEY = "amt_notifications_enabled";
 
 const ticketNumberEl = document.getElementById("ticket-number");
 const statusEl = document.getElementById("status");
 const retryBtn = document.getElementById("retry");
 const revokeBtn = document.getElementById("revoke");
-const soundToggleBtn = document.getElementById("sound-toggle");
-const notificationToggleBtn = document.getElementById("notification-toggle");
+const notificationToggleEl = document.getElementById("notification-toggle");
+const notificationRowEl = document.getElementById("notification-row");
 const imprintLinkEl = document.getElementById("imprint-link");
 const estimateEl = document.getElementById("estimate");
 const peopleAheadEl = document.getElementById("people-ahead");
@@ -19,34 +17,40 @@ const waitTimeEl = document.getElementById("wait-time");
 let currentTicketId = null;
 let hasNotified = false;
 let pollIntervalId = null;
-let audioCtx = null;
-let soundEnabled = window.localStorage.getItem(SOUND_ENABLED_KEY) === "true";
-let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) === "true";
+let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
 
 function supportsNotifications() {
   return typeof window !== "undefined" && "Notification" in window;
 }
 
-function updateNotificationButton() {
-  if (!notificationToggleBtn) {
+function updateNotificationToggle() {
+  if (!notificationToggleEl) {
     return;
   }
 
   if (!supportsNotifications()) {
-    notificationToggleBtn.hidden = true;
+    if (notificationRowEl) {
+      notificationRowEl.hidden = true;
+    }
     return;
   }
 
-  notificationToggleBtn.hidden = false;
+  if (notificationRowEl) {
+    notificationRowEl.hidden = false;
+  }
 
   if (Notification.permission === "denied") {
-    notificationToggleBtn.disabled = true;
-    notificationToggleBtn.textContent = "Notifications blocked";
+    notificationsEnabled = false;
+    window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, "false");
+    notificationToggleEl.checked = false;
+    notificationToggleEl.disabled = true;
+    notificationToggleEl.title = "Blocked in browser settings";
     return;
   }
 
-  notificationToggleBtn.disabled = false;
-  notificationToggleBtn.textContent = notificationsEnabled ? "Disable notifications" : "Enable notifications";
+  notificationToggleEl.disabled = false;
+  notificationToggleEl.title = "";
+  notificationToggleEl.checked = notificationsEnabled;
 }
 
 async function showBrowserNotification(title, body, tag) {
@@ -80,14 +84,14 @@ async function showBrowserNotification(title, body, tag) {
 async function setNotificationsEnabled(nextState, showPreview = false) {
   if (!supportsNotifications()) {
     notificationsEnabled = false;
-    updateNotificationButton();
+    updateNotificationToggle();
     return;
   }
 
   if (!nextState) {
     notificationsEnabled = false;
     window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, "false");
-    updateNotificationButton();
+    updateNotificationToggle();
     return;
   }
 
@@ -98,101 +102,14 @@ async function setNotificationsEnabled(nextState, showPreview = false) {
 
   notificationsEnabled = permission === "granted";
   window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, String(notificationsEnabled));
-  updateNotificationButton();
+  updateNotificationToggle();
 
   if (notificationsEnabled && showPreview) {
     await showBrowserNotification("Notifications enabled", "You will now receive ticket-call notifications.", "amt-notify-enabled");
   }
 }
-
-function getAudioContext() {
-  if (!AudioContextClass) {
-    return null;
-  }
-
-  if (!audioCtx) {
-    audioCtx = new AudioContextClass();
-  }
-
-  if (audioCtx.state === "suspended") {
-    audioCtx.resume().catch(() => {});
-  }
-
-  return audioCtx;
-}
-
-function updateSoundButton() {
-  if (!soundToggleBtn) {
-    return;
-  }
-
-  soundToggleBtn.textContent = soundEnabled ? "Disable sound" : "Enable sound";
-}
-
-async function setSoundEnabled(nextState, playPreview = false) {
-  soundEnabled = nextState;
-  window.localStorage.setItem(SOUND_ENABLED_KEY, String(soundEnabled));
-
-  if (!soundEnabled) {
-    updateSoundButton();
-    if (audioCtx && audioCtx.state === "running") {
-      audioCtx.suspend().catch(() => {});
-    }
-    return;
-  }
-
-  const context = getAudioContext();
-  if (!context) {
-    soundEnabled = false;
-    window.localStorage.setItem(SOUND_ENABLED_KEY, "false");
-    updateSoundButton();
-    return;
-  }
-
-  try {
-    await context.resume();
-    soundEnabled = context.state === "running";
-    window.localStorage.setItem(SOUND_ENABLED_KEY, String(soundEnabled));
-    updateSoundButton();
-
-    if (soundEnabled && playPreview) {
-      playChime([740, 988, 1244]);
-    }
-  } catch (error) {
-    console.error(error);
-  }
-}
-
-function tryResumeAudio() {
-  if (!soundEnabled) {
-    return;
-  }
-
-  const context = getAudioContext();
-  if (!context || context.state === "running") {
-    return;
-  }
-
-  context.resume().then(() => {
-    soundEnabled = context.state === "running";
-    updateSoundButton();
-  }).catch(() => {});
-}
-
-window.addEventListener("pointerdown", tryResumeAudio, { passive: true });
-window.addEventListener("keydown", tryResumeAudio);
-window.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    tryResumeAudio();
-  }
-});
-
-soundToggleBtn?.addEventListener("click", () => {
-  setSoundEnabled(!soundEnabled, !soundEnabled);
-});
-
-notificationToggleBtn?.addEventListener("click", () => {
-  setNotificationsEnabled(!notificationsEnabled, !notificationsEnabled);
+notificationToggleEl?.addEventListener("change", () => {
+  setNotificationsEnabled(Boolean(notificationToggleEl.checked), Boolean(notificationToggleEl.checked));
 });
 
 retryBtn?.addEventListener("click", () => {
@@ -373,36 +290,6 @@ async function createTicket() {
   }
 }
 
-function playChime(frequencies) {
-  if (!soundEnabled) {
-    return false;
-  }
-
-  const context = getAudioContext();
-  if (!context || context.state !== "running") {
-    return false;
-  }
-
-  let timeline = context.currentTime + 0.02;
-
-  frequencies.forEach((frequency) => {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "triangle";
-    oscillator.frequency.setValueAtTime(frequency, timeline);
-    gain.gain.setValueAtTime(0.0001, timeline);
-    gain.gain.exponentialRampToValueAtTime(0.14, timeline + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, timeline + 0.36);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(timeline);
-    oscillator.stop(timeline + 0.38);
-    timeline += 0.18;
-  });
-
-  return true;
-}
-
 async function pollTicket() {
   if (!currentTicketId) {
     return;
@@ -420,11 +307,6 @@ async function pollTicket() {
         hasNotified = true;
         statusEl.textContent = "Agent is ready for you now. Please head in 🎉";
         statusEl.classList.add("ok");
-        const played = playChime([740, 988, 1244, 988]);
-        if (!played) {
-          statusEl.textContent = "Agent is ready for you now. Tap Enable sound for alerts.";
-          statusEl.classList.add("ok");
-        }
         if ("vibrate" in navigator) {
           navigator.vibrate([180, 80, 220]);
         }
@@ -507,8 +389,10 @@ window.addEventListener("beforeunload", () => {
 });
 
 resetEstimate();
-updateSoundButton();
-updateNotificationButton();
+updateNotificationToggle();
 applyImprintLink();
+if (notificationsEnabled && supportsNotifications() && Notification.permission === "default") {
+  setNotificationsEnabled(true, false);
+}
 restoreTicketOrCreate();
 
