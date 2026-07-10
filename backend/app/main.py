@@ -65,20 +65,28 @@ def create_app(storage_file: Path | None = None) -> FastAPI:
             return None
         return normalized
 
+    def split_roles(roles: str | None) -> list[str]:
+        if roles is None:
+            return []
+        return [item for item in (normalize_role(part) for part in roles.split(",")) if item]
+
+    def resolve_scope(passphrase: str | None, queue_identifier: str | None) -> str | None:
+        return normalize_passphrase(queue_identifier) or normalize_passphrase(passphrase)
+
     def cleanup_roles(now_value: float) -> None:
         stale = [key for key, seen_at in active_roles.items() if now_value - seen_at > roles_ttl_seconds]
         for key in stale:
             del active_roles[key]
 
-    def register_presence(passphrase: str | None, role: str | None) -> None:
-        normalized_role = normalize_role(role)
-        if normalized_role is None:
+    def register_presence(passphrase: str | None, roles: list[str]) -> None:
+        if not roles:
             return
         normalized_passphrase = normalize_passphrase(passphrase)
         now_value = monotonic()
         with roles_lock:
             cleanup_roles(now_value)
-            active_roles[(normalized_passphrase, normalized_role)] = now_value
+            for role in roles:
+                active_roles[(normalized_passphrase, role)] = now_value
 
     def list_roles(passphrase: str | None) -> list[str]:
         normalized_passphrase = normalize_passphrase(passphrase)
@@ -98,60 +106,94 @@ def create_app(storage_file: Path | None = None) -> FastAPI:
     @app.post("/api/tickets", response_model=CreateTicketResponse)
     def create_ticket(
         passphrase: str | None = Query(default=None),
+        queue_identifier: str | None = Query(default=None),
         role: str | None = Query(default=None),
     ) -> CreateTicketResponse:
-        ticket = store.create_ticket(passphrase=passphrase, role=role)
+        ticket = store.create_ticket(passphrase=resolve_scope(passphrase, queue_identifier), role=role)
         return CreateTicketResponse(ticket=ticket)
 
     @app.get("/api/tickets/open", response_model=OpenTicketsResponse)
     def open_tickets(
         passphrase: str | None = Query(default=None),
+        queue_identifier: str | None = Query(default=None),
         agent_role: str | None = Query(default=None),
+        agent_roles: str | None = Query(default=None),
     ) -> OpenTicketsResponse:
-        return OpenTicketsResponse(tickets=store.list_open_tickets(passphrase=passphrase, agent_role=agent_role))
+        return OpenTicketsResponse(
+            tickets=store.list_open_tickets(
+                passphrase=resolve_scope(passphrase, queue_identifier),
+                agent_role=agent_role,
+                agent_roles=split_roles(agent_roles),
+            )
+        )
 
     @app.post("/api/agents/presence")
     def agent_presence(
         passphrase: str | None = Query(default=None),
+        queue_identifier: str | None = Query(default=None),
         role: str | None = Query(default=None),
+        roles: str | None = Query(default=None),
     ) -> dict[str, str]:
-        register_presence(passphrase=passphrase, role=role)
+        parsed_roles = split_roles(roles)
+        normalized_single = normalize_role(role)
+        if normalized_single and normalized_single not in parsed_roles:
+            parsed_roles.append(normalized_single)
+        register_presence(passphrase=resolve_scope(passphrase, queue_identifier), roles=parsed_roles)
         return {"status": "ok"}
 
     @app.get("/api/roles", response_model=ActiveRolesResponse)
-    def roles(passphrase: str | None = Query(default=None)) -> ActiveRolesResponse:
-        return ActiveRolesResponse(roles=list_roles(passphrase=passphrase))
+    def roles(
+        passphrase: str | None = Query(default=None),
+        queue_identifier: str | None = Query(default=None),
+    ) -> ActiveRolesResponse:
+        return ActiveRolesResponse(roles=list_roles(passphrase=resolve_scope(passphrase, queue_identifier)))
 
     @app.post("/api/tickets/{ticket_id}/claim", response_model=ClaimTicketResponse)
-    def claim_ticket(ticket_id: int, passphrase: str | None = Query(default=None)) -> ClaimTicketResponse:
+    def claim_ticket(
+        ticket_id: int,
+        passphrase: str | None = Query(default=None),
+        queue_identifier: str | None = Query(default=None),
+    ) -> ClaimTicketResponse:
         try:
-            ticket = store.claim_ticket(ticket_id, passphrase=passphrase)
+            ticket = store.claim_ticket(ticket_id, passphrase=resolve_scope(passphrase, queue_identifier))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
         return ClaimTicketResponse(ticket=ticket)
 
     @app.post("/api/tickets/{ticket_id}/revoke", response_model=ClaimTicketResponse)
-    def revoke_ticket(ticket_id: int, passphrase: str | None = Query(default=None)) -> ClaimTicketResponse:
+    def revoke_ticket(
+        ticket_id: int,
+        passphrase: str | None = Query(default=None),
+        queue_identifier: str | None = Query(default=None),
+    ) -> ClaimTicketResponse:
         try:
-            ticket = store.revoke_ticket(ticket_id, passphrase=passphrase)
+            ticket = store.revoke_ticket(ticket_id, passphrase=resolve_scope(passphrase, queue_identifier))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
         return ClaimTicketResponse(ticket=ticket)
 
     @app.get("/api/tickets/{ticket_id}", response_model=TicketStatusResponse)
-    def ticket_status(ticket_id: int, passphrase: str | None = Query(default=None)) -> TicketStatusResponse:
+    def ticket_status(
+        ticket_id: int,
+        passphrase: str | None = Query(default=None),
+        queue_identifier: str | None = Query(default=None),
+    ) -> TicketStatusResponse:
         try:
-            ticket = store.get_ticket(ticket_id, passphrase=passphrase)
+            ticket = store.get_ticket(ticket_id, passphrase=resolve_scope(passphrase, queue_identifier))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
         return TicketStatusResponse(ticket=ticket)
 
     @app.get("/api/tickets/{ticket_id}/estimate", response_model=TicketEstimateResponse)
-    def ticket_estimate(ticket_id: int, passphrase: str | None = Query(default=None)) -> TicketEstimateResponse:
+    def ticket_estimate(
+        ticket_id: int,
+        passphrase: str | None = Query(default=None),
+        queue_identifier: str | None = Query(default=None),
+    ) -> TicketEstimateResponse:
         try:
             people_ahead, estimated_wait_minutes, average_service_minutes = store.estimate_for_ticket(
                 ticket_id,
-                passphrase=passphrase,
+                passphrase=resolve_scope(passphrase, queue_identifier),
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc

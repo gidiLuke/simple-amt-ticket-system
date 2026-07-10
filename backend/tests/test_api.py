@@ -173,3 +173,39 @@ def test_active_roles_list_from_agent_presence(tmp_path: Path) -> None:
     roles = client.get("/api/roles").json()["roles"]
     assert roles == ["passport", "tax"]
 
+
+def test_queue_identifier_alias_works_for_scope(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    created = client.post("/api/tickets", params={"queue_identifier": "north-office"})
+    assert created.status_code == 200
+    ticket_id = created.json()["ticket"]["id"]
+
+    visible = client.get("/api/tickets/open", params={"queue_identifier": "north-office"}).json()["tickets"]
+    assert [ticket["id"] for ticket in visible] == [ticket_id]
+
+    not_visible = client.get("/api/tickets/open")
+    assert not_visible.status_code == 200
+    assert not_visible.json()["tickets"] == []
+
+
+def test_agent_can_filter_with_multiple_roles(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    general = client.post("/api/tickets").json()["ticket"]
+    passport = client.post("/api/tickets", params={"role": "passport"}).json()["ticket"]
+    tax = client.post("/api/tickets", params={"role": "tax"}).json()["ticket"]
+    building = client.post("/api/tickets", params={"role": "building"}).json()["ticket"]
+
+    filtered = client.get("/api/tickets/open", params={"agent_roles": "passport,tax"}).json()["tickets"]
+    assert [ticket["id"] for ticket in filtered] == [general["id"], passport["id"], tax["id"]]
+    assert all(ticket["id"] != building["id"] for ticket in filtered)
+
+
+def test_presence_accepts_multiple_roles_csv(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    client.post("/api/agents/presence", params={"roles": "passport,tax"})
+    roles = client.get("/api/roles").json()["roles"]
+    assert roles == ["passport", "tax"]
+

@@ -1,8 +1,10 @@
-const queryApi = new URLSearchParams(window.location.search).get("api");
+const queryParams = new URLSearchParams(window.location.search);
+const queryApi = queryParams.get("api");
+const queryQueueIdentifier = queryParams.get("queue_identifier") || queryParams.get("passphrase");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
 const NOTIFICATION_ENABLED_KEY = "amt_agent_notifications_enabled";
-const PASSPHRASE_STORAGE_KEY = "amt_agent_passphrase";
-const ROLE_STORAGE_PREFIX = "amt_agent_role";
+const QUEUE_IDENTIFIER_STORAGE_KEY = "amt_agent_queue_identifier";
+const ROLE_STORAGE_PREFIX = "amt_agent_roles";
 
 const ticketsEl = document.getElementById("tickets");
 const badgeEl = document.getElementById("agent-badge");
@@ -17,22 +19,32 @@ const clearPassphraseEl = document.getElementById("clear-passphrase");
 const roleInputEl = document.getElementById("role-input");
 const applyRoleEl = document.getElementById("apply-role");
 const clearRoleEl = document.getElementById("clear-role");
+const subscribedRolesEl = document.getElementById("subscribed-roles");
+const availableRolesEl = document.getElementById("available-roles");
 const userQrImageEl = document.getElementById("user-qr");
 const userLinkEl = document.getElementById("user-link");
 const downloadQrEl = document.getElementById("download-qr");
 const imprintLinkEl = document.getElementById("imprint-link");
+
 let seenTicketIds = new Set();
 let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
-let activePassphrase = normalizePassphrase(new URLSearchParams(window.location.search).get("passphrase")) ||
-  normalizePassphrase(window.localStorage.getItem(PASSPHRASE_STORAGE_KEY));
+let activeQueueIdentifier = normalizeQueueIdentifier(queryQueueIdentifier)
+  || normalizeQueueIdentifier(window.localStorage.getItem(QUEUE_IDENTIFIER_STORAGE_KEY));
+let subscribedRoles = loadSubscribedRoles(activeQueueIdentifier);
+let availableRoles = [];
 let presenceIntervalId = null;
-let activeRole = normalizeRole(window.localStorage.getItem(roleStorageKey(activePassphrase)));
 
-function normalizePassphrase(value) {
+function normalizeQueueIdentifier(value) {
   if (typeof value !== "string") {
     return null;
   }
-  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9-\s]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-");
+
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-\s]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
   return normalized || null;
 }
 
@@ -40,24 +52,60 @@ function normalizeRole(value) {
   if (typeof value !== "string") {
     return null;
   }
-  const normalized = value.trim().toLowerCase();
+
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
   return normalized || null;
 }
 
-function roleStorageKey(passphrase) {
-  return `${ROLE_STORAGE_PREFIX}:${passphrase || "demo"}`;
+function roleStorageKey(queueIdentifier) {
+  return `${ROLE_STORAGE_PREFIX}:${queueIdentifier || "demo"}`;
+}
+
+function loadSubscribedRoles(queueIdentifier) {
+  try {
+    const raw = window.localStorage.getItem(roleStorageKey(queueIdentifier));
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item) => normalizeRole(String(item)))
+      .filter((item, index, arr) => item && arr.indexOf(item) === index);
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
+
+function saveSubscribedRoles(queueIdentifier, roles) {
+  if (!roles.length) {
+    window.localStorage.removeItem(roleStorageKey(queueIdentifier));
+    return;
+  }
+
+  window.localStorage.setItem(roleStorageKey(queueIdentifier), JSON.stringify(roles));
 }
 
 function buildApiUrl(path, extraParams = {}) {
   const url = new URL(`${API_BASE_URL}${path}`);
-  if (activePassphrase) {
-    url.searchParams.set("passphrase", activePassphrase);
+  if (activeQueueIdentifier) {
+    url.searchParams.set("queue_identifier", activeQueueIdentifier);
   }
+
   Object.entries(extraParams).forEach(([key, value]) => {
     if (value !== null && value !== undefined && String(value).trim() !== "") {
       url.searchParams.set(key, String(value));
     }
   });
+
   return url.toString();
 }
 
@@ -69,8 +117,8 @@ function suggestedUserLink() {
   if (queryApi) {
     userUrl.searchParams.set("api", queryApi);
   }
-  if (activePassphrase) {
-    userUrl.searchParams.set("passphrase", activePassphrase);
+  if (activeQueueIdentifier) {
+    userUrl.searchParams.set("queue_identifier", activeQueueIdentifier);
   }
 
   return userUrl.toString();
@@ -85,7 +133,7 @@ function buildQrImageUrl(link) {
   return qrUrl.toString();
 }
 
-function makeRandomPassphrase() {
+function makeRandomQueueIdentifier() {
   const wordsA = ["amber", "brisk", "civic", "delta", "eager", "fancy", "gentle", "harbor", "ivory", "jolly"];
   const wordsB = ["otter", "lantern", "meadow", "signal", "paper", "rocket", "ticket", "window", "forest", "piano"];
   const wordsC = ["bridge", "sheriff", "station", "pocket", "beacon", "ledger", "avenue", "village", "harbor", "office"];
@@ -99,13 +147,67 @@ function updateQueueModeLabel() {
     return;
   }
 
-  const queueText = activePassphrase
-    ? `Queue scope: ${activePassphrase}`
-    : "Queue scope: demo";
-  const roleText = activeRole
-    ? `Agent role: ${activeRole} (sees general + ${activeRole})`
-    : "Agent role: general pool only";
-  queueModeHintEl.textContent = `${queueText} | ${roleText}`;
+  const queueText = activeQueueIdentifier
+    ? `Queue identifier: ${activeQueueIdentifier}`
+    : "Queue identifier: demo";
+  const rolesText = subscribedRoles.length
+    ? `Subscribed roles: ${subscribedRoles.join(", ")} (plus general pool)`
+    : "Subscribed roles: none (general pool only)";
+  queueModeHintEl.textContent = `${queueText} | ${rolesText}`;
+}
+
+function renderRoleChips() {
+  if (subscribedRolesEl) {
+    if (!subscribedRoles.length) {
+      subscribedRolesEl.innerHTML = '<span class="meta">General pool only</span>';
+    } else {
+      subscribedRolesEl.innerHTML = "";
+      subscribedRoles.forEach((role) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "role-chip role-chip-active";
+        chip.textContent = `${role} x`;
+        chip.addEventListener("click", () => unsubscribeRole(role));
+        subscribedRolesEl.appendChild(chip);
+      });
+    }
+  }
+
+  if (availableRolesEl) {
+    const nonSubscribed = availableRoles.filter((role) => !subscribedRoles.includes(role));
+    if (!nonSubscribed.length) {
+      availableRolesEl.innerHTML = '<span class="meta">No extra roles discovered</span>';
+    } else {
+      availableRolesEl.innerHTML = "";
+      nonSubscribed.forEach((role) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "role-chip";
+        chip.textContent = `+ ${role}`;
+        chip.addEventListener("click", () => subscribeRole(role));
+        availableRolesEl.appendChild(chip);
+      });
+    }
+  }
+}
+
+async function loadAvailableRoles() {
+  try {
+    const response = await fetch(buildApiUrl("/api/roles"));
+    if (!response.ok) {
+      throw new Error(`Role fetch failed (${response.status})`);
+    }
+
+    const payload = await response.json();
+    availableRoles = Array.isArray(payload.roles)
+      ? payload.roles
+        .map((role) => normalizeRole(String(role)))
+        .filter((role, index, arr) => role && arr.indexOf(role) === index)
+      : [];
+    renderRoleChips();
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 async function renderUserQr() {
@@ -114,58 +216,77 @@ async function renderUserQr() {
   }
 
   const link = suggestedUserLink();
-  const qrImageUrl = buildQrImageUrl(link);
   userLinkEl.textContent = link;
   userLinkEl.href = link;
-  userQrImageEl.src = qrImageUrl;
+  userQrImageEl.src = buildQrImageUrl(link);
 }
 
-function applyPassphrase(nextValue) {
-  activePassphrase = normalizePassphrase(nextValue);
-  if (activePassphrase) {
-    window.localStorage.setItem(PASSPHRASE_STORAGE_KEY, activePassphrase);
+function applyQueueIdentifier(nextValue) {
+  activeQueueIdentifier = normalizeQueueIdentifier(nextValue);
+  if (activeQueueIdentifier) {
+    window.localStorage.setItem(QUEUE_IDENTIFIER_STORAGE_KEY, activeQueueIdentifier);
   } else {
-    window.localStorage.removeItem(PASSPHRASE_STORAGE_KEY);
+    window.localStorage.removeItem(QUEUE_IDENTIFIER_STORAGE_KEY);
   }
 
   if (passphraseInputEl) {
-    passphraseInputEl.value = activePassphrase || "";
+    passphraseInputEl.value = activeQueueIdentifier || "";
   }
 
-  activeRole = normalizeRole(window.localStorage.getItem(roleStorageKey(activePassphrase)));
+  subscribedRoles = loadSubscribedRoles(activeQueueIdentifier);
   if (roleInputEl) {
-    roleInputEl.value = activeRole || "";
+    roleInputEl.value = "";
   }
 
+  saveSubscribedRoles(activeQueueIdentifier, subscribedRoles);
   updateQueueModeLabel();
+  renderRoleChips();
   renderUserQr();
+  loadAvailableRoles();
   registerPresence();
   seenTicketIds = new Set();
   loadTickets();
 }
 
-function applyRole(nextValue) {
-  activeRole = normalizeRole(nextValue);
-
-  if (activeRole) {
-    window.localStorage.setItem(roleStorageKey(activePassphrase), activeRole);
-  } else {
-    window.localStorage.removeItem(roleStorageKey(activePassphrase));
+function subscribeRole(nextRole) {
+  const normalized = normalizeRole(nextRole);
+  if (!normalized || subscribedRoles.includes(normalized)) {
+    return;
   }
 
-  if (roleInputEl) {
-    roleInputEl.value = activeRole || "";
-  }
-
+  subscribedRoles = subscribedRoles.concat(normalized);
+  saveSubscribedRoles(activeQueueIdentifier, subscribedRoles);
   updateQueueModeLabel();
+  renderRoleChips();
   registerPresence();
-  seenTicketIds = new Set();
+  loadTickets();
+}
+
+function unsubscribeRole(role) {
+  subscribedRoles = subscribedRoles.filter((item) => item !== role);
+  saveSubscribedRoles(activeQueueIdentifier, subscribedRoles);
+  updateQueueModeLabel();
+  renderRoleChips();
+  registerPresence();
+  loadTickets();
+}
+
+function clearRoles() {
+  subscribedRoles = [];
+  if (roleInputEl) {
+    roleInputEl.value = "";
+  }
+  saveSubscribedRoles(activeQueueIdentifier, subscribedRoles);
+  updateQueueModeLabel();
+  renderRoleChips();
+  registerPresence();
   loadTickets();
 }
 
 async function registerPresence() {
   try {
-    await fetch(buildApiUrl("/api/agents/presence", { role: activeRole }), { method: "POST" });
+    await fetch(buildApiUrl("/api/agents/presence", { roles: subscribedRoles.join(",") }), { method: "POST" });
+    await loadAvailableRoles();
   } catch (error) {
     console.error(error);
   }
@@ -318,7 +439,7 @@ function renderTickets(tickets) {
   ticketsEl.innerHTML = "";
 
   if (tickets.length === 0) {
-    ticketsEl.innerHTML = `<div class="empty">No open tickets right now. Enjoy the calm ☕</div>`;
+    ticketsEl.innerHTML = '<div class="empty">No open tickets right now. Enjoy the calm ☕</div>';
     return;
   }
 
@@ -346,7 +467,7 @@ function renderTickets(tickets) {
 
 async function loadTickets() {
   try {
-    const response = await fetch(buildApiUrl("/api/tickets/open", { agent_role: activeRole }));
+    const response = await fetch(buildApiUrl("/api/tickets/open", { agent_roles: subscribedRoles.join(",") }));
     if (!response.ok) {
       throw new Error(`Queue fetch failed (${response.status})`);
     }
@@ -378,6 +499,7 @@ settingsToggleEl?.addEventListener("click", () => {
   }
   settingsPanelEl.hidden = !settingsPanelEl.hidden;
   if (!settingsPanelEl.hidden) {
+    loadAvailableRoles();
     passphraseInputEl?.focus();
   }
 });
@@ -386,23 +508,26 @@ generatePassphraseEl?.addEventListener("click", () => {
   if (!passphraseInputEl) {
     return;
   }
-  passphraseInputEl.value = makeRandomPassphrase();
+  passphraseInputEl.value = makeRandomQueueIdentifier();
 });
 
 applyPassphraseEl?.addEventListener("click", () => {
-  applyPassphrase(passphraseInputEl?.value || null);
+  applyQueueIdentifier(passphraseInputEl?.value || null);
 });
 
 clearPassphraseEl?.addEventListener("click", () => {
-  applyPassphrase(null);
+  applyQueueIdentifier(null);
 });
 
 applyRoleEl?.addEventListener("click", () => {
-  applyRole(roleInputEl?.value || null);
+  subscribeRole(roleInputEl?.value || null);
+  if (roleInputEl) {
+    roleInputEl.value = "";
+  }
 });
 
 clearRoleEl?.addEventListener("click", () => {
-  applyRole(null);
+  clearRoles();
 });
 
 downloadQrEl?.addEventListener("click", () => {
@@ -410,7 +535,7 @@ downloadQrEl?.addEventListener("click", () => {
     return;
   }
   const link = document.createElement("a");
-  const suffix = activePassphrase || "demo";
+  const suffix = activeQueueIdentifier || "demo";
   link.download = `amt-queue-${suffix}.png`;
   link.href = userQrImageEl.src;
   link.click();
@@ -424,12 +549,11 @@ if (settingsPanelEl) {
 }
 updateQueueModeLabel();
 if (passphraseInputEl) {
-  passphraseInputEl.value = activePassphrase || "";
+  passphraseInputEl.value = activeQueueIdentifier || "";
 }
-if (roleInputEl) {
-  roleInputEl.value = activeRole || "";
-}
+renderRoleChips();
 renderUserQr();
+loadAvailableRoles();
 updateNotificationToggle();
 startPresenceHeartbeat();
 if (notificationsEnabled && supportsNotifications() && Notification.permission === "default") {
@@ -442,4 +566,3 @@ window.addEventListener("beforeunload", () => {
     presenceIntervalId = null;
   }
 });
-

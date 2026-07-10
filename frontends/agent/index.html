@@ -19,10 +19,10 @@
         <p class="sub">Live queue for incoming front-desk QR tickets.</p>
         <span id="agent-badge" class="badge">Listening for new tickets...</span>
 
-        <div id="queue-mode-hint" class="mode-hint">Demo mode (no passphrase)</div>
+        <div id="queue-mode-hint" class="mode-hint">Demo mode (no queue identifier)</div>
 
         <div id="settings-panel" class="settings-panel" hidden>
-          <label class="settings-label" for="passphrase-input">Queue passphrase (optional)</label>
+          <label class="settings-label" for="passphrase-input">Queue identifier (optional)</label>
           <div class="settings-row">
             <input id="passphrase-input" class="passphrase-input" type="text" maxlength="64" placeholder="e.g. amber-river-lantern" />
             <button id="generate-passphrase" class="secondary" type="button">Generate</button>
@@ -35,8 +35,18 @@
           <label class="settings-label" for="role-input">Agent role (optional)</label>
           <div class="settings-row">
             <input id="role-input" class="passphrase-input" type="text" maxlength="64" placeholder="e.g. passport" />
-            <button id="apply-role" class="secondary" type="button">Apply role</button>
-            <button id="clear-role" class="secondary" type="button">General pool only</button>
+            <button id="apply-role" class="secondary" type="button">+ Subscribe role</button>
+            <button id="clear-role" class="secondary" type="button">Clear all roles</button>
+          </div>
+          <div class="role-groups">
+            <div>
+              <div class="qr-header">Subscribed roles</div>
+              <div id="subscribed-roles" class="role-chip-wrap"></div>
+            </div>
+            <div>
+              <div class="qr-header">Available roles</div>
+              <div id="available-roles" class="role-chip-wrap"></div>
+            </div>
           </div>
 
           <div class="qr-block">

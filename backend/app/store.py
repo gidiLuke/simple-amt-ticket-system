@@ -35,9 +35,17 @@ class TicketStore:
             self._save()
             return ticket
 
-    def list_open_tickets(self, passphrase: str | None = None, agent_role: str | None = None) -> list[Ticket]:
+    def list_open_tickets(
+        self,
+        passphrase: str | None = None,
+        agent_role: str | None = None,
+        agent_roles: list[str] | None = None,
+    ) -> list[Ticket]:
         normalized_passphrase = self._normalize_passphrase(passphrase)
-        normalized_role = self._normalize_role(agent_role)
+        normalized_roles = self._normalize_roles(agent_roles)
+        single_role = self._normalize_role(agent_role)
+        if single_role is not None and single_role not in normalized_roles:
+            normalized_roles.append(single_role)
         with self._lock:
             return sorted(
                 [
@@ -45,7 +53,7 @@ class TicketStore:
                     for ticket in self._tickets.values()
                     if ticket.status == "open"
                     and self._matches_scope(ticket, normalized_passphrase)
-                    and self._matches_agent_visibility(ticket, normalized_role)
+                    and self._matches_agent_visibility(ticket, normalized_roles)
                 ],
                 key=lambda ticket: ticket.id,
             )
@@ -206,13 +214,24 @@ class TicketStore:
             return None
         return normalized
 
+    def _normalize_roles(self, roles: list[str] | None) -> list[str]:
+        if not roles:
+            return []
+
+        normalized: list[str] = []
+        for role in roles:
+            normalized_role = self._normalize_role(role)
+            if normalized_role is not None and normalized_role not in normalized:
+                normalized.append(normalized_role)
+        return normalized
+
     @staticmethod
     def _matches_scope(ticket: Ticket, passphrase: str | None) -> bool:
         return ticket.passphrase == passphrase
 
     @staticmethod
-    def _matches_agent_visibility(ticket: Ticket, agent_role: str | None) -> bool:
-        if agent_role is None:
+    def _matches_agent_visibility(ticket: Ticket, agent_roles: list[str]) -> bool:
+        if not agent_roles:
             return ticket.role is None
-        return ticket.role is None or ticket.role == agent_role
+        return ticket.role is None or ticket.role in agent_roles
 

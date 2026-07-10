@@ -1,9 +1,10 @@
-const queryApi = new URLSearchParams(window.location.search).get("api");
-const queryPassphrase = new URLSearchParams(window.location.search).get("passphrase");
+const queryParams = new URLSearchParams(window.location.search);
+const queryApi = queryParams.get("api");
+const queryQueueIdentifier = queryParams.get("queue_identifier") || queryParams.get("passphrase");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
 const NOTIFICATION_ENABLED_KEY = "amt_notifications_enabled";
-const PASS_PHRASE = normalizePassphrase(queryPassphrase);
-const STORAGE_KEY = `amt_active_ticket_id:${PASS_PHRASE || "demo"}`;
+const QUEUE_IDENTIFIER = normalizePassphrase(queryQueueIdentifier);
+const STORAGE_KEY = `amt_active_ticket_id:${QUEUE_IDENTIFIER || "demo"}`;
 
 const ticketNumberEl = document.getElementById("ticket-number");
 const statusEl = document.getElementById("status");
@@ -42,8 +43,8 @@ function normalizePassphrase(value) {
 
 function buildApiUrl(path) {
   const url = new URL(`${API_BASE_URL}${path}`);
-  if (PASS_PHRASE) {
-    url.searchParams.set("passphrase", PASS_PHRASE);
+  if (QUEUE_IDENTIFIER) {
+    url.searchParams.set("queue_identifier", QUEUE_IDENTIFIER);
   }
   return url.toString();
 }
@@ -80,16 +81,33 @@ async function loadRoles() {
     }
 
     const payload = await response.json();
-    const roles = Array.isArray(payload.roles) ? payload.roles : [];
-    const options = ["<option value=\"\">General pool</option>"]
-      .concat(roles.map((role) => `<option value=\"${role}\">${role}</option>`))
-      .join("");
+    const roles = Array.isArray(payload.roles)
+      ? payload.roles
+        .map((role) => normalizePassphrase(String(role)))
+        .filter((role, index, arr) => role && arr.indexOf(role) === index)
+      : [];
 
-    roleSelectEl.innerHTML = options;
+    roleSelectEl.innerHTML = "";
+    const generalOption = document.createElement("option");
+    generalOption.value = "";
+    generalOption.textContent = "General pool";
+    roleSelectEl.appendChild(generalOption);
+
+    roles.forEach((role) => {
+      const option = document.createElement("option");
+      option.value = role;
+      option.textContent = role;
+      roleSelectEl.appendChild(option);
+    });
+
     roleSelectEl.value = selectedRole || "";
   } catch (error) {
     console.error(error);
   }
+}
+
+function setCalledAttention(active) {
+  document.body.classList.toggle("ticket-called-active", active);
 }
 
 function startRolesPolling() {
@@ -284,6 +302,7 @@ function hideCalledBanner() {
 }
 
 async function triggerTicketCalledAlert(ticket) {
+  setCalledAttention(true);
   startTitleAlert(ticket.number);
   showCalledBanner(ticket.number);
   startFallbackAlertLoop();
@@ -456,6 +475,7 @@ function clearActiveTicket() {
   revokeBtn.hidden = true;
   resetEstimate();
   hideCalledBanner();
+  setCalledAttention(false);
   stopFallbackAlertLoop();
   stopTitleAlert();
   selectedRole = null;
@@ -643,6 +663,7 @@ document.addEventListener("visibilitychange", () => {
 
 callAlertDismissEl?.addEventListener("click", () => {
   hideCalledBanner();
+  setCalledAttention(false);
   stopFallbackAlertLoop();
   stopTitleAlert();
 });
