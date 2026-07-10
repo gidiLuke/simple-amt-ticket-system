@@ -82,6 +82,46 @@ body.ticket-called-active .glass.hero {
   gap: 12px;
 }
 
+.role-screen {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.role-screen-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.role-buttons {
+  display: grid;
+  gap: 8px;
+}
+
+.role-option-btn {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  box-shadow: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+
+.role-option-btn:hover {
+  box-shadow: none;
+  border-color: rgba(176, 0, 17, 0.35);
+}
+
+.role-option-btn .meta {
+  margin-top: 3px;
+  display: block;
+  font-size: 0.8rem;
+}
+
 .call-alert {
   margin-top: 16px;
   padding: 14px 16px;
@@ -438,6 +478,11 @@ button:disabled {
 
   .estimate-grid {
     grid-template-columns: 1fr;
+  }
+
+  .role-option-btn {
+    padding: 14px;
+    font-size: 1rem;
   }
 }
 

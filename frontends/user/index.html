@@ -15,17 +15,14 @@
         </div>
         <p class="sub">Please keep this screen open. You will be alerted here as soon as an agent calls your ticket.</p>
 
-        <div id="role-panel" class="settings-panel">
-          <label class="settings-label" for="role-select">Choose your queue role</label>
-          <div class="settings-row">
-            <select id="role-select" class="passphrase-input"></select>
-            <button id="refresh-roles" class="secondary" type="button">Refresh</button>
-            <button id="request-ticket" type="button">Get ticket</button>
-          </div>
-          <div class="meta">You can choose a specific role or stay in the general pool.</div>
+        <div id="role-panel" class="role-screen">
+          <p class="role-screen-title">Choose your queue</p>
+          <p class="meta">Tap a pool to request your ticket.</p>
+          <div id="role-buttons" class="role-buttons"></div>
+          <button id="refresh-roles" class="secondary" type="button">Refresh roles</button>
         </div>
 
-        <div class="ticket-display">
+        <div id="ticket-screen" class="ticket-display" hidden>
           <div id="ticket-number" class="ticket-pill">Creating ticket...</div>
           <p id="status" class="status">Connecting to queue service...</p>
           <div class="estimate-grid" id="estimate" hidden>

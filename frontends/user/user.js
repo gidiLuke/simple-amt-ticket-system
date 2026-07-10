@@ -18,9 +18,9 @@ const waitTimeEl = document.getElementById("wait-time");
 const callAlertEl = document.getElementById("call-alert");
 const callAlertDismissEl = document.getElementById("call-alert-dismiss");
 const rolePanelEl = document.getElementById("role-panel");
-const roleSelectEl = document.getElementById("role-select");
+const roleButtonsEl = document.getElementById("role-buttons");
 const refreshRolesEl = document.getElementById("refresh-roles");
-const requestTicketEl = document.getElementById("request-ticket");
+const ticketScreenEl = document.getElementById("ticket-screen");
 const PAGE_TITLE_DEFAULT = document.title;
 
 let currentTicketId = null;
@@ -64,13 +64,15 @@ function toggleRolePanel(visible) {
   rolePanelEl.hidden = !visible;
 }
 
-function selectedRoleFromUi() {
-  const value = normalizePassphrase(roleSelectEl?.value || "");
-  return value || null;
+function toggleTicketScreen(visible) {
+  if (!ticketScreenEl) {
+    return;
+  }
+  ticketScreenEl.hidden = !visible;
 }
 
 async function loadRoles() {
-  if (!roleSelectEl) {
+  if (!roleButtonsEl) {
     return;
   }
 
@@ -87,20 +89,19 @@ async function loadRoles() {
         .filter((role, index, arr) => role && arr.indexOf(role) === index)
       : [];
 
-    roleSelectEl.innerHTML = "";
-    const generalOption = document.createElement("option");
-    generalOption.value = "";
-    generalOption.textContent = "General pool";
-    roleSelectEl.appendChild(generalOption);
+    roleButtonsEl.innerHTML = "";
 
-    roles.forEach((role) => {
-      const option = document.createElement("option");
-      option.value = role;
-      option.textContent = role;
-      roleSelectEl.appendChild(option);
+    const pools = [{ role: null, title: "General pool", subtitle: "Visible to all agents" }]
+      .concat(roles.map((role) => ({ role, title: role, subtitle: "Role-specific queue" })));
+
+    pools.forEach((pool) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "role-option-btn";
+      button.innerHTML = `<span>${pool.title}</span><span class=\"meta\">${pool.subtitle}</span>`;
+      button.addEventListener("click", () => createTicket(pool.role));
+      roleButtonsEl.appendChild(button);
     });
-
-    roleSelectEl.value = selectedRole || "";
   } catch (error) {
     console.error(error);
   }
@@ -135,6 +136,7 @@ function showRoleSelectionPrompt() {
   revokeBtn.hidden = true;
   resetEstimate();
   toggleRolePanel(true);
+  toggleTicketScreen(false);
   startRolesPolling();
 }
 
@@ -363,10 +365,6 @@ retryBtn?.addEventListener("click", () => {
   showRoleSelectionPrompt();
 });
 
-requestTicketEl?.addEventListener("click", () => {
-  createTicket();
-});
-
 refreshRolesEl?.addEventListener("click", () => {
   loadRoles();
 });
@@ -490,6 +488,7 @@ async function restoreTicketOrCreate() {
   }
 
   toggleRolePanel(false);
+  toggleTicketScreen(true);
   stopRolesPolling();
   currentTicketId = storedId;
   statusEl.textContent = "Restoring your ticket...";
@@ -522,12 +521,12 @@ async function restoreTicketOrCreate() {
   }
 }
 
-async function createTicket() {
+async function createTicket(forcedRole = null) {
   if (currentTicketId) {
     return;
   }
 
-  selectedRole = selectedRoleFromUi();
+  selectedRole = forcedRole;
 
   ticketNumberEl.textContent = "Creating ticket...";
   statusEl.textContent = "Connecting to the queue service...";
@@ -545,6 +544,7 @@ async function createTicket() {
     const payload = await response.json();
     const ticket = payload.ticket;
     toggleRolePanel(false);
+    toggleTicketScreen(true);
     stopRolesPolling();
     setActiveOpenTicket(ticket);
     updateEstimate();
