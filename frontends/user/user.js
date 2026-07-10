@@ -71,6 +71,18 @@ function toggleTicketScreen(visible) {
   ticketScreenEl.hidden = !visible;
 }
 
+function setScreenMode(mode) {
+  const isSelection = mode === "selection";
+  toggleRolePanel(isSelection);
+  toggleTicketScreen(!isSelection);
+
+  if (isSelection) {
+    startRolesPolling();
+  } else {
+    stopRolesPolling();
+  }
+}
+
 async function loadRoles() {
   if (!roleButtonsEl) {
     return;
@@ -135,9 +147,7 @@ function showRoleSelectionPrompt() {
   resetRevokeButtonState();
   revokeBtn.hidden = true;
   resetEstimate();
-  toggleRolePanel(true);
-  toggleTicketScreen(false);
-  startRolesPolling();
+  setScreenMode("selection");
 }
 
 function supportsNotifications() {
@@ -458,6 +468,8 @@ function setActiveOpenTicket(ticket) {
   saveCurrentTicketId(ticket.id);
   hasNotified = false;
 
+  setScreenMode("ticket");
+
   ticketNumberEl.textContent = ticket.number;
   statusEl.textContent = "Your ticket is active. We will call you shortly.";
   statusEl.classList.remove("ok");
@@ -488,9 +500,7 @@ function clearActiveTicket(options = {}) {
   if (returnToSelection) {
     showRoleSelectionPrompt();
   } else {
-    toggleRolePanel(false);
-    toggleTicketScreen(true);
-    stopRolesPolling();
+    setScreenMode("ticket");
   }
 }
 
@@ -501,9 +511,7 @@ async function restoreTicketOrCreate() {
     return;
   }
 
-  toggleRolePanel(false);
-  toggleTicketScreen(true);
-  stopRolesPolling();
+  setScreenMode("ticket");
   currentTicketId = storedId;
   statusEl.textContent = "Restoring your ticket...";
   retryBtn.hidden = true;
@@ -557,9 +565,6 @@ async function createTicket(forcedRole = null) {
 
     const payload = await response.json();
     const ticket = payload.ticket;
-    toggleRolePanel(false);
-    toggleTicketScreen(true);
-    stopRolesPolling();
     setActiveOpenTicket(ticket);
     updateEstimate();
     startPolling();
