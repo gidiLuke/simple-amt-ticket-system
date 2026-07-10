@@ -1,6 +1,8 @@
 const queryParams = new URLSearchParams(window.location.search);
 const queryApi = queryParams.get("api");
 const queryQueueIdentifier = queryParams.get("queue_identifier") || queryParams.get("passphrase");
+const queryRoles = queryParams.get("roles");
+const queryNotifications = queryParams.get("notifications");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
 const NOTIFICATION_ENABLED_KEY = "amt_agent_notifications_enabled";
 const QUEUE_IDENTIFIER_STORAGE_KEY = "amt_agent_queue_identifier";
@@ -29,14 +31,85 @@ const imprintLinkEl = document.getElementById("imprint-link");
 const PAGE_TITLE_DEFAULT = document.title;
 
 let seenTicketIds = new Set();
-let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
 let activeQueueIdentifier = normalizeQueueIdentifier(queryQueueIdentifier)
   || normalizeQueueIdentifier(window.localStorage.getItem(QUEUE_IDENTIFIER_STORAGE_KEY));
-let subscribedRoles = loadSubscribedRoles(activeQueueIdentifier);
+let notificationsEnabled = resolveNotificationsEnabled();
+let subscribedRoles = resolveInitialSubscribedRoles(activeQueueIdentifier);
 let availableRoles = [];
 let presenceIntervalId = null;
 let titlePulseIntervalId = null;
 let inlineAlertTimeoutId = null;
+let swRegistrationPromise = null;
+
+async function ensureServiceWorkerRegistration() {
+  if (!("serviceWorker" in navigator)) {
+    return null;
+  }
+
+  if (!swRegistrationPromise) {
+    swRegistrationPromise = navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => {
+      console.error(error);
+      return null;
+    });
+  }
+
+  return swRegistrationPromise;
+}
+
+function resolveNotificationsEnabled() {
+  if (queryNotifications !== null) {
+    const normalized = queryNotifications.trim().toLowerCase();
+    return normalized === "on" || normalized === "true" || normalized === "1";
+  }
+  return window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
+}
+
+function parseRolesParam(rawRoles) {
+  if (!rawRoles) {
+    return [];
+  }
+
+  return rawRoles
+    .split(",")
+    .map((role) => normalizeRole(role))
+    .filter((role, index, arr) => role && arr.indexOf(role) === index);
+}
+
+function resolveInitialSubscribedRoles(queueIdentifier) {
+  const urlRoles = parseRolesParam(queryRoles);
+  if (urlRoles.length > 0) {
+    return urlRoles;
+  }
+  return loadSubscribedRoles(queueIdentifier);
+}
+
+function syncBookmarkUrl() {
+  const nextUrl = new URL(window.location.href);
+
+  if (queryApi) {
+    nextUrl.searchParams.set("api", queryApi);
+  } else {
+    nextUrl.searchParams.delete("api");
+  }
+
+  if (activeQueueIdentifier) {
+    nextUrl.searchParams.set("queue_identifier", activeQueueIdentifier);
+  } else {
+    nextUrl.searchParams.delete("queue_identifier");
+  }
+
+  nextUrl.searchParams.delete("passphrase");
+
+  if (subscribedRoles.length > 0) {
+    nextUrl.searchParams.set("roles", subscribedRoles.join(","));
+  } else {
+    nextUrl.searchParams.delete("roles");
+  }
+
+  nextUrl.searchParams.set("notifications", notificationsEnabled ? "on" : "off");
+
+  window.history.replaceState({}, "", nextUrl);
+}
 
 function normalizeQueueIdentifier(value) {
   if (typeof value !== "string") {
@@ -243,6 +316,7 @@ function applyQueueIdentifier(nextValue) {
   }
 
   saveSubscribedRoles(activeQueueIdentifier, subscribedRoles);
+  syncBookmarkUrl();
   updateQueueModeLabel();
   renderRoleChips();
   renderUserQr();
@@ -260,6 +334,7 @@ function subscribeRole(nextRole) {
 
   subscribedRoles = subscribedRoles.concat(normalized);
   saveSubscribedRoles(activeQueueIdentifier, subscribedRoles);
+  syncBookmarkUrl();
   updateQueueModeLabel();
   renderRoleChips();
   registerPresence();
@@ -269,6 +344,7 @@ function subscribeRole(nextRole) {
 function unsubscribeRole(role) {
   subscribedRoles = subscribedRoles.filter((item) => item !== role);
   saveSubscribedRoles(activeQueueIdentifier, subscribedRoles);
+  syncBookmarkUrl();
   updateQueueModeLabel();
   renderRoleChips();
   registerPresence();
@@ -281,6 +357,7 @@ function clearRoles() {
     roleInputEl.value = "";
   }
   saveSubscribedRoles(activeQueueIdentifier, subscribedRoles);
+  syncBookmarkUrl();
   updateQueueModeLabel();
   renderRoleChips();
   registerPresence();
@@ -350,12 +427,10 @@ async function showBrowserNotification(title, body, tag) {
   };
 
   try {
-    if ("serviceWorker" in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration();
-      if (registration) {
-        await registration.showNotification(title, options);
-        return true;
-      }
+    const registration = await ensureServiceWorkerRegistration();
+    if (registration) {
+      await registration.showNotification(title, options);
+      return true;
     }
 
     new Notification(title, options);
@@ -504,6 +579,7 @@ async function setNotificationsEnabled(nextState, showPreview = false) {
 
   notificationsEnabled = permission === "granted";
   window.localStorage.setItem(NOTIFICATION_ENABLED_KEY, String(notificationsEnabled));
+  syncBookmarkUrl();
   updateNotificationToggle();
 
   if (notificationsEnabled && showPreview) {
@@ -675,6 +751,7 @@ downloadQrEl?.addEventListener("click", () => {
 loadTickets();
 window.setInterval(loadTickets, 2000);
 applyImprintLink();
+syncBookmarkUrl();
 if (settingsPanelEl) {
   settingsPanelEl.hidden = true;
 }
@@ -685,6 +762,7 @@ if (passphraseInputEl) {
 renderRoleChips();
 renderUserQr();
 loadAvailableRoles();
+ensureServiceWorkerRegistration();
 updateNotificationToggle();
 startPresenceHeartbeat();
 if (notificationsEnabled && supportsNotifications() && Notification.permission === "default") {
