@@ -138,8 +138,19 @@ body.ticket-called-active .glass.hero {
 }
 
 .call-alert-body {
-  margin: 4px 0 10px;
+  margin: 4px 0 0;
   color: var(--text);
+}
+
+.agent-inline-alert {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(176, 0, 17, 0.28);
+  background: rgba(234, 0, 22, 0.08);
+  color: var(--accent-2);
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .estimate-grid {

@@ -16,7 +16,6 @@ const estimateEl = document.getElementById("estimate");
 const peopleAheadEl = document.getElementById("people-ahead");
 const waitTimeEl = document.getElementById("wait-time");
 const callAlertEl = document.getElementById("call-alert");
-const callAlertDismissEl = document.getElementById("call-alert-dismiss");
 const rolePanelEl = document.getElementById("role-panel");
 const roleButtonsEl = document.getElementById("role-buttons");
 const refreshRolesEl = document.getElementById("refresh-roles");
@@ -683,13 +682,6 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && !currentTicketId) {
     loadRoles();
   }
-});
-
-callAlertDismissEl?.addEventListener("click", () => {
-  hideCalledBanner();
-  setCalledAttention(false);
-  stopFallbackAlertLoop();
-  stopTitleAlert();
 });
 
 resetEstimate();

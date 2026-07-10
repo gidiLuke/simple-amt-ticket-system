@@ -8,6 +8,7 @@ const ROLE_STORAGE_PREFIX = "amt_agent_roles";
 
 const ticketsEl = document.getElementById("tickets");
 const badgeEl = document.getElementById("agent-badge");
+const agentInlineAlertEl = document.getElementById("agent-inline-alert");
 const notificationToggleEl = document.getElementById("notification-toggle");
 const settingsToggleEl = document.getElementById("settings-toggle");
 const settingsPanelEl = document.getElementById("settings-panel");
@@ -25,6 +26,7 @@ const userQrImageEl = document.getElementById("user-qr");
 const userLinkEl = document.getElementById("user-link");
 const downloadQrEl = document.getElementById("download-qr");
 const imprintLinkEl = document.getElementById("imprint-link");
+const PAGE_TITLE_DEFAULT = document.title;
 
 let seenTicketIds = new Set();
 let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
@@ -33,6 +35,8 @@ let activeQueueIdentifier = normalizeQueueIdentifier(queryQueueIdentifier)
 let subscribedRoles = loadSubscribedRoles(activeQueueIdentifier);
 let availableRoles = [];
 let presenceIntervalId = null;
+let titlePulseIntervalId = null;
+let inlineAlertTimeoutId = null;
 
 function normalizeQueueIdentifier(value) {
   if (typeof value !== "string") {
@@ -342,6 +346,7 @@ async function showBrowserNotification(title, body, tag) {
     body,
     tag,
     renotify: true,
+    requireInteraction: true,
   };
 
   try {
@@ -358,6 +363,123 @@ async function showBrowserNotification(title, body, tag) {
   } catch (error) {
     console.error(error);
     return false;
+  }
+}
+
+function startTitlePulse(message) {
+  if (titlePulseIntervalId) {
+    return;
+  }
+
+  const alertTitle = `New ticket - ${message}`;
+  let showAlert = true;
+  document.title = alertTitle;
+
+  titlePulseIntervalId = window.setInterval(() => {
+    document.title = showAlert ? alertTitle : PAGE_TITLE_DEFAULT;
+    showAlert = !showAlert;
+  }, 1100);
+}
+
+function stopTitlePulse() {
+  if (!titlePulseIntervalId) {
+    document.title = PAGE_TITLE_DEFAULT;
+    return;
+  }
+
+  window.clearInterval(titlePulseIntervalId);
+  titlePulseIntervalId = null;
+  document.title = PAGE_TITLE_DEFAULT;
+}
+
+function playAgentAlertTone() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      return;
+    }
+
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const oscA = ctx.createOscillator();
+    const oscB = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    oscA.type = "triangle";
+    oscA.frequency.value = 880;
+    oscB.type = "triangle";
+    oscB.frequency.value = 1175;
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    oscA.connect(gain);
+    oscB.connect(gain);
+    gain.connect(ctx.destination);
+
+    oscA.start(now);
+    oscB.start(now + 0.18);
+    oscA.stop(now + 0.35);
+    oscB.stop(now + 0.5);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function showInlineAlert(message) {
+  if (!agentInlineAlertEl) {
+    return;
+  }
+
+  agentInlineAlertEl.textContent = message;
+  agentInlineAlertEl.hidden = false;
+
+  if (inlineAlertTimeoutId) {
+    window.clearTimeout(inlineAlertTimeoutId);
+  }
+  inlineAlertTimeoutId = window.setTimeout(() => {
+    if (agentInlineAlertEl) {
+      agentInlineAlertEl.hidden = true;
+    }
+    inlineAlertTimeoutId = null;
+  }, 10000);
+}
+
+function clearInlineAlert() {
+  if (!agentInlineAlertEl) {
+    return;
+  }
+
+  agentInlineAlertEl.hidden = true;
+  if (inlineAlertTimeoutId) {
+    window.clearTimeout(inlineAlertTimeoutId);
+    inlineAlertTimeoutId = null;
+  }
+}
+
+async function notifyNewTickets(newTicketCount, totalOpenTickets) {
+  const message = newTicketCount === 1
+    ? "1 new ticket arrived"
+    : `${newTicketCount} new tickets arrived`;
+
+  badgeEl.textContent = `${message} - open: ${totalOpenTickets}`;
+  showInlineAlert(message);
+  playAgentAlertTone();
+
+  if (document.visibilityState !== "visible") {
+    startTitlePulse(message);
+  }
+
+  const sent = await showBrowserNotification(
+    "New ticket in queue",
+    `${message}. ${totalOpenTickets} ticket${totalOpenTickets === 1 ? "" : "s"} open.`,
+    "amt-agent-new-ticket"
+  );
+
+  if (!sent && notificationsEnabled && notificationToggleEl) {
+    notificationToggleEl.textContent = "Alerts limited";
+    notificationToggleEl.title = "System notifications may be restricted. In-app alerts remain active.";
   }
 }
 
@@ -476,13 +598,15 @@ async function loadTickets() {
     const tickets = payload.tickets;
 
     const currentIds = new Set(tickets.map((ticket) => ticket.id));
-    const hasNewTicket = [...currentIds].some((id) => !seenTicketIds.has(id));
+    const newTicketCount = [...currentIds].filter((id) => !seenTicketIds.has(id)).length;
 
-    if (hasNewTicket && seenTicketIds.size > 0) {
-      badgeEl.textContent = "New ticket arrived 🔔";
-      showBrowserNotification("New ticket in queue", `${tickets.length} open ticket${tickets.length === 1 ? "" : "s"} in queue.`, "amt-agent-new-ticket");
+    if (newTicketCount > 0 && seenTicketIds.size > 0) {
+      notifyNewTickets(newTicketCount, tickets.length);
     } else {
       badgeEl.textContent = `Open tickets: ${tickets.length}`;
+      if (tickets.length === 0) {
+        clearInlineAlert();
+      }
     }
 
     seenTicketIds = currentIds;
@@ -492,6 +616,13 @@ async function loadTickets() {
     badgeEl.textContent = "Disconnected from API. Retrying...";
   }
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    stopTitlePulse();
+    loadTickets();
+  }
+});
 
 settingsToggleEl?.addEventListener("click", () => {
   if (!settingsPanelEl) {
@@ -565,4 +696,6 @@ window.addEventListener("beforeunload", () => {
     window.clearInterval(presenceIntervalId);
     presenceIntervalId = null;
   }
+  stopTitlePulse();
+  clearInlineAlert();
 });
