@@ -20,6 +20,7 @@ const callAlertDismissEl = document.getElementById("call-alert-dismiss");
 const rolePanelEl = document.getElementById("role-panel");
 const roleButtonsEl = document.getElementById("role-buttons");
 const refreshRolesEl = document.getElementById("refresh-roles");
+const selectionScreenEl = document.getElementById("selection-screen");
 const ticketScreenEl = document.getElementById("ticket-screen");
 const PAGE_TITLE_DEFAULT = document.title;
 
@@ -73,6 +74,9 @@ function toggleTicketScreen(visible) {
 
 function setScreenMode(mode) {
   const isSelection = mode === "selection";
+  if (selectionScreenEl) {
+    selectionScreenEl.hidden = !isSelection;
+  }
   toggleRolePanel(isSelection);
   toggleTicketScreen(!isSelection);
 

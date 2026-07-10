@@ -8,21 +8,25 @@
   </head>
   <body>
     <main class="shell">
-      <section class="glass hero">
-        <div class="hero-top-row">
-          <h1 class="headline">Welcome.</h1>
-          <button id="notification-toggle" class="notify-chip" type="button" hidden></button>
-        </div>
-        <p class="sub">Please keep this screen open. You will be alerted here as soon as an agent calls your ticket.</p>
-
+      <section id="selection-screen" class="glass hero">
+        <h1 class="headline">Welcome.</h1>
+        <p class="sub">Choose your queue to request a ticket.</p>
         <div id="role-panel" class="role-screen">
           <p class="role-screen-title">Choose your queue</p>
           <p class="meta">Tap a pool to request your ticket.</p>
           <div id="role-buttons" class="role-buttons"></div>
           <button id="refresh-roles" class="secondary" type="button">Refresh roles</button>
         </div>
+      </section>
 
-        <div id="ticket-screen" class="ticket-display" hidden>
+      <section id="ticket-screen" class="glass hero" hidden>
+        <div class="hero-top-row">
+          <h1 class="headline">Your Ticket</h1>
+          <button id="notification-toggle" class="notify-chip" type="button" hidden></button>
+        </div>
+        <p class="sub">Please keep this screen open while you wait for your call.</p>
+
+        <div class="ticket-display">
           <div id="ticket-number" class="ticket-pill">Creating ticket...</div>
           <p id="status" class="status">Connecting to queue service...</p>
           <div class="estimate-grid" id="estimate" hidden>
