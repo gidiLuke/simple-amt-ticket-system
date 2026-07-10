@@ -466,18 +466,32 @@ function setActiveOpenTicket(ticket) {
   revokeBtn.hidden = false;
 }
 
-function clearActiveTicket() {
+function clearActiveTicket(options = {}) {
+  const returnToSelection = Boolean(options.returnToSelection);
+  const keepCalledVisual = Boolean(options.keepCalledVisual);
+
   currentTicketId = null;
   clearStoredTicketId();
   resetRevokeButtonState();
   revokeBtn.hidden = true;
   resetEstimate();
-  hideCalledBanner();
-  setCalledAttention(false);
-  stopFallbackAlertLoop();
-  stopTitleAlert();
+
+  if (!keepCalledVisual) {
+    hideCalledBanner();
+    setCalledAttention(false);
+    stopFallbackAlertLoop();
+    stopTitleAlert();
+  }
+
   selectedRole = null;
-  showRoleSelectionPrompt();
+
+  if (returnToSelection) {
+    showRoleSelectionPrompt();
+  } else {
+    toggleRolePanel(false);
+    toggleTicketScreen(true);
+    stopRolesPolling();
+  }
 }
 
 async function restoreTicketOrCreate() {
@@ -510,13 +524,13 @@ async function restoreTicketOrCreate() {
       return;
     }
 
-    clearActiveTicket();
+    clearActiveTicket({ returnToSelection: true });
     ticketNumberEl.textContent = ticket.number;
     statusEl.textContent = "This ticket has already been closed. You can request a new one.";
     showRetry(statusEl.textContent);
   } catch (error) {
     console.error(error);
-    clearActiveTicket();
+    clearActiveTicket({ returnToSelection: true });
     showRetry("Could not restore previous ticket. You can request a new one.");
   }
 }
@@ -573,15 +587,19 @@ async function pollTicket() {
         statusEl.textContent = "Your ticket has been called. Please head to the desk now.";
         statusEl.classList.add("ok");
         await triggerTicketCalledAlert(payload.ticket);
+        clearActiveTicket({ returnToSelection: false, keepCalledVisual: true });
+        return;
       } else if (payload.ticket.closed_by === "user") {
         statusEl.textContent = "Ticket revoked. You can request a new one.";
         hideCalledBanner();
+        setCalledAttention(false);
         stopFallbackAlertLoop();
         stopTitleAlert();
+        clearActiveTicket({ returnToSelection: true });
+        return;
       }
 
-      clearActiveTicket();
-      showRetry(statusEl.textContent);
+      clearActiveTicket({ returnToSelection: false });
       return;
     }
 
@@ -618,10 +636,7 @@ async function revokeTicket() {
       throw new Error(`Revoke failed (${response.status})`);
     }
 
-    clearActiveTicket();
-    statusEl.textContent = "Ticket revoked. You can request a new one.";
-    statusEl.classList.remove("ok");
-    showRetry(statusEl.textContent);
+    clearActiveTicket({ returnToSelection: true });
   } catch (error) {
     console.error(error);
     statusEl.textContent = "Could not revoke ticket right now.";
