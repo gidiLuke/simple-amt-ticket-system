@@ -159,8 +159,8 @@ def test_numbers_restart_per_role_pool(tmp_path: Path) -> None:
 
     assert general_first["number"] == "A-0001"
     assert general_second["number"] == "A-0002"
-    assert role_first["number"] == "A-0001"
-    assert role_second["number"] == "A-0002"
+    assert role_first["number"] == "A-0003"
+    assert role_second["number"] == "A-0004"
 
 
 def test_active_roles_list_from_agent_presence(tmp_path: Path) -> None:

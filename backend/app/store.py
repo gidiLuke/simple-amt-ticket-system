@@ -21,7 +21,7 @@ class TicketStore:
         normalized_role = self._normalize_role(role)
         with self._lock:
             ticket_id = self._next_id
-            scoped_number = self._next_number_for_scope(normalized_passphrase, normalized_role)
+            scoped_number = self._next_number_for_scope(normalized_passphrase)
             ticket = Ticket(
                 id=ticket_id,
                 number=self._format_number(scoped_number),
@@ -188,11 +188,11 @@ class TicketStore:
 
         return max(1, round(sum(closed_durations_minutes) / len(closed_durations_minutes)))
 
-    def _next_number_for_scope(self, passphrase: str | None, role: str | None) -> int:
+    def _next_number_for_scope(self, passphrase: str | None) -> int:
         in_scope = [
             ticket
             for ticket in self._tickets.values()
-            if ticket.passphrase == passphrase and ticket.role == role
+            if ticket.passphrase == passphrase
         ]
         return len(in_scope) + 1
 
