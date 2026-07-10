@@ -234,6 +234,10 @@ button:disabled {
   gap: 10px;
 }
 
+.settings-panel[hidden] {
+  display: none;
+}
+
 .settings-label {
   font-size: 0.82rem;
   color: var(--muted);
@@ -272,7 +276,7 @@ button:disabled {
   color: var(--muted);
 }
 
-#user-qr {
+.user-qr {
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 10px;

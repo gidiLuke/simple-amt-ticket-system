@@ -115,3 +115,19 @@ def test_ticket_access_requires_matching_passphrase(tmp_path: Path) -> None:
     correct_scope_claim = client.post(f"/api/tickets/{scoped_ticket['id']}/claim", params={"passphrase": "alpha-team"})
     assert correct_scope_claim.status_code == 200
 
+
+def test_ticket_numbers_start_from_one_per_scope(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    demo_first = client.post("/api/tickets").json()["ticket"]
+    demo_second = client.post("/api/tickets").json()["ticket"]
+    scoped_first = client.post("/api/tickets", params={"passphrase": "alpha-team"}).json()["ticket"]
+    scoped_second = client.post("/api/tickets", params={"passphrase": "alpha-team"}).json()["ticket"]
+    other_scope_first = client.post("/api/tickets", params={"passphrase": "beta-team"}).json()["ticket"]
+
+    assert demo_first["number"] == "A-0001"
+    assert demo_second["number"] == "A-0002"
+    assert scoped_first["number"] == "A-0001"
+    assert scoped_second["number"] == "A-0002"
+    assert other_scope_first["number"] == "A-0001"
+

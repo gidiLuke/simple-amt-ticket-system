@@ -17,12 +17,14 @@ class TicketStore:
         self._load()
 
     def create_ticket(self, passphrase: str | None = None) -> Ticket:
+        normalized_passphrase = self._normalize_passphrase(passphrase)
         with self._lock:
             ticket_id = self._next_id
+            scoped_number = self._next_number_for_scope(normalized_passphrase)
             ticket = Ticket(
                 id=ticket_id,
-                number=self._format_number(ticket_id),
-                passphrase=self._normalize_passphrase(passphrase),
+                number=self._format_number(scoped_number),
+                passphrase=normalized_passphrase,
                 status="open",
                 created_at=datetime.now(timezone.utc),
             )
@@ -172,6 +174,10 @@ class TicketStore:
             return self._default_service_minutes()
 
         return max(1, round(sum(closed_durations_minutes) / len(closed_durations_minutes)))
+
+    def _next_number_for_scope(self, passphrase: str | None) -> int:
+        in_scope = [ticket for ticket in self._tickets.values() if ticket.passphrase == passphrase]
+        return len(in_scope) + 1
 
     @staticmethod
     def _normalize_passphrase(passphrase: str | None) -> str | None:

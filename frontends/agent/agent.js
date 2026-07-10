@@ -13,7 +13,7 @@ const passphraseInputEl = document.getElementById("passphrase-input");
 const generatePassphraseEl = document.getElementById("generate-passphrase");
 const applyPassphraseEl = document.getElementById("apply-passphrase");
 const clearPassphraseEl = document.getElementById("clear-passphrase");
-const userQrCanvasEl = document.getElementById("user-qr");
+const userQrImageEl = document.getElementById("user-qr");
 const userLinkEl = document.getElementById("user-link");
 const downloadQrEl = document.getElementById("download-qr");
 const imprintLinkEl = document.getElementById("imprint-link");
@@ -53,6 +53,15 @@ function suggestedUserLink() {
   return userUrl.toString();
 }
 
+function buildQrImageUrl(link) {
+  const qrUrl = new URL("https://api.qrserver.com/v1/create-qr-code/");
+  qrUrl.searchParams.set("size", "220x220");
+  qrUrl.searchParams.set("margin", "10");
+  qrUrl.searchParams.set("format", "png");
+  qrUrl.searchParams.set("data", link);
+  return qrUrl.toString();
+}
+
 function makeRandomPassphrase() {
   const wordsA = ["amber", "brisk", "civic", "delta", "eager", "fancy", "gentle", "harbor", "ivory", "jolly"];
   const wordsB = ["otter", "lantern", "meadow", "signal", "paper", "rocket", "ticket", "window", "forest", "piano"];
@@ -73,35 +82,15 @@ function updateQueueModeLabel() {
 }
 
 async function renderUserQr() {
-  if (!userQrCanvasEl || !userLinkEl) {
+  if (!userQrImageEl || !userLinkEl) {
     return;
   }
 
   const link = suggestedUserLink();
+  const qrImageUrl = buildQrImageUrl(link);
   userLinkEl.textContent = link;
   userLinkEl.href = link;
-
-  if (!window.QRCode) {
-    const context = userQrCanvasEl.getContext("2d");
-    if (context) {
-      context.clearRect(0, 0, userQrCanvasEl.width, userQrCanvasEl.height);
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, userQrCanvasEl.width, userQrCanvasEl.height);
-      context.fillStyle = "#111a2e";
-      context.font = "14px sans-serif";
-      context.fillText("QR unavailable", 56, 112);
-    }
-    return;
-  }
-
-  await window.QRCode.toCanvas(userQrCanvasEl, link, {
-    width: 220,
-    margin: 1,
-    color: {
-      dark: "#111a2e",
-      light: "#ffffff",
-    },
-  });
+  userQrImageEl.src = qrImageUrl;
 }
 
 function applyPassphrase(nextValue) {
@@ -338,19 +327,22 @@ clearPassphraseEl?.addEventListener("click", () => {
 });
 
 downloadQrEl?.addEventListener("click", () => {
-  if (!userQrCanvasEl) {
+  if (!userQrImageEl) {
     return;
   }
   const link = document.createElement("a");
   const suffix = activePassphrase || "demo";
   link.download = `amt-queue-${suffix}.png`;
-  link.href = userQrCanvasEl.toDataURL("image/png");
+  link.href = userQrImageEl.src;
   link.click();
 });
 
 loadTickets();
 window.setInterval(loadTickets, 2000);
 applyImprintLink();
+if (settingsPanelEl) {
+  settingsPanelEl.hidden = true;
+}
 updateQueueModeLabel();
 if (passphraseInputEl) {
   passphraseInputEl.value = activePassphrase || "";
