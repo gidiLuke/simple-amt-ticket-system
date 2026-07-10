@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import (
+    ActiveRolesResponse,
     ClaimTicketResponse,
     CreateTicketResponse,
     OpenTicketsResponse,
@@ -42,19 +45,82 @@ def create_app(storage_file: Path | None = None) -> FastAPI:
     )
 
     store = TicketStore(storage_file=storage_file or _default_storage_file())
+    active_roles: dict[tuple[str | None, str], float] = {}
+    roles_lock = Lock()
+    roles_ttl_seconds = 45.0
+
+    def normalize_role(role: str | None) -> str | None:
+        if role is None:
+            return None
+        normalized = role.strip().lower()
+        if not normalized:
+            return None
+        return normalized
+
+    def normalize_passphrase(passphrase: str | None) -> str | None:
+        if passphrase is None:
+            return None
+        normalized = passphrase.strip().lower()
+        if not normalized:
+            return None
+        return normalized
+
+    def cleanup_roles(now_value: float) -> None:
+        stale = [key for key, seen_at in active_roles.items() if now_value - seen_at > roles_ttl_seconds]
+        for key in stale:
+            del active_roles[key]
+
+    def register_presence(passphrase: str | None, role: str | None) -> None:
+        normalized_role = normalize_role(role)
+        if normalized_role is None:
+            return
+        normalized_passphrase = normalize_passphrase(passphrase)
+        now_value = monotonic()
+        with roles_lock:
+            cleanup_roles(now_value)
+            active_roles[(normalized_passphrase, normalized_role)] = now_value
+
+    def list_roles(passphrase: str | None) -> list[str]:
+        normalized_passphrase = normalize_passphrase(passphrase)
+        now_value = monotonic()
+        with roles_lock:
+            cleanup_roles(now_value)
+            return sorted(
+                role
+                for (scope, role), _seen_at in active_roles.items()
+                if scope == normalized_passphrase
+            )
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "version": app.version}
 
     @app.post("/api/tickets", response_model=CreateTicketResponse)
-    def create_ticket(passphrase: str | None = Query(default=None)) -> CreateTicketResponse:
-        ticket = store.create_ticket(passphrase=passphrase)
+    def create_ticket(
+        passphrase: str | None = Query(default=None),
+        role: str | None = Query(default=None),
+    ) -> CreateTicketResponse:
+        ticket = store.create_ticket(passphrase=passphrase, role=role)
         return CreateTicketResponse(ticket=ticket)
 
     @app.get("/api/tickets/open", response_model=OpenTicketsResponse)
-    def open_tickets(passphrase: str | None = Query(default=None)) -> OpenTicketsResponse:
-        return OpenTicketsResponse(tickets=store.list_open_tickets(passphrase=passphrase))
+    def open_tickets(
+        passphrase: str | None = Query(default=None),
+        agent_role: str | None = Query(default=None),
+    ) -> OpenTicketsResponse:
+        return OpenTicketsResponse(tickets=store.list_open_tickets(passphrase=passphrase, agent_role=agent_role))
+
+    @app.post("/api/agents/presence")
+    def agent_presence(
+        passphrase: str | None = Query(default=None),
+        role: str | None = Query(default=None),
+    ) -> dict[str, str]:
+        register_presence(passphrase=passphrase, role=role)
+        return {"status": "ok"}
+
+    @app.get("/api/roles", response_model=ActiveRolesResponse)
+    def roles(passphrase: str | None = Query(default=None)) -> ActiveRolesResponse:
+        return ActiveRolesResponse(roles=list_roles(passphrase=passphrase))
 
     @app.post("/api/tickets/{ticket_id}/claim", response_model=ClaimTicketResponse)
     def claim_ticket(ticket_id: int, passphrase: str | None = Query(default=None)) -> ClaimTicketResponse:

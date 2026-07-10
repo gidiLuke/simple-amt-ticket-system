@@ -9,6 +9,7 @@ class Ticket(BaseModel):
     id: int
     number: str
     passphrase: str | None = None
+    role: str | None = None
     status: str = Field(pattern="^(open|closed)$")
     created_at: datetime
     claimed_at: datetime | None = None
@@ -36,4 +37,8 @@ class TicketEstimateResponse(BaseModel):
     people_ahead: int
     estimated_wait_minutes: int
     average_service_minutes: int
+
+
+class ActiveRolesResponse(BaseModel):
+    roles: list[str]
 

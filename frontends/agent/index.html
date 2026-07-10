@@ -32,6 +32,13 @@
             <button id="clear-passphrase" class="secondary" type="button">Use demo mode</button>
           </div>
 
+          <label class="settings-label" for="role-input">Agent role (optional)</label>
+          <div class="settings-row">
+            <input id="role-input" class="passphrase-input" type="text" maxlength="64" placeholder="e.g. passport" />
+            <button id="apply-role" class="secondary" type="button">Apply role</button>
+            <button id="clear-role" class="secondary" type="button">General pool only</button>
+          </div>
+
           <div class="qr-block">
             <div class="qr-header">User entry QR</div>
             <img id="user-qr" class="user-qr" alt="User entry QR code" width="220" height="220" />

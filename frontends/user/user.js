@@ -16,6 +16,10 @@ const peopleAheadEl = document.getElementById("people-ahead");
 const waitTimeEl = document.getElementById("wait-time");
 const callAlertEl = document.getElementById("call-alert");
 const callAlertDismissEl = document.getElementById("call-alert-dismiss");
+const rolePanelEl = document.getElementById("role-panel");
+const roleSelectEl = document.getElementById("role-select");
+const refreshRolesEl = document.getElementById("refresh-roles");
+const requestTicketEl = document.getElementById("request-ticket");
 const PAGE_TITLE_DEFAULT = document.title;
 
 let currentTicketId = null;
@@ -24,6 +28,8 @@ let pollIntervalId = null;
 let titleAlertIntervalId = null;
 let fallbackAlertIntervalId = null;
 let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
+let rolesPollIntervalId = null;
+let selectedRole = null;
 
 function normalizePassphrase(value) {
   if (typeof value !== "string") {
@@ -40,6 +46,78 @@ function buildApiUrl(path) {
     url.searchParams.set("passphrase", PASS_PHRASE);
   }
   return url.toString();
+}
+
+function buildRoleAwareApiUrl(path, role) {
+  const url = new URL(buildApiUrl(path));
+  if (role) {
+    url.searchParams.set("role", role);
+  }
+  return url.toString();
+}
+
+function toggleRolePanel(visible) {
+  if (!rolePanelEl) {
+    return;
+  }
+  rolePanelEl.hidden = !visible;
+}
+
+function selectedRoleFromUi() {
+  const value = normalizePassphrase(roleSelectEl?.value || "");
+  return value || null;
+}
+
+async function loadRoles() {
+  if (!roleSelectEl) {
+    return;
+  }
+
+  try {
+    const response = await fetch(buildApiUrl("/api/roles"));
+    if (!response.ok) {
+      throw new Error(`Role fetch failed (${response.status})`);
+    }
+
+    const payload = await response.json();
+    const roles = Array.isArray(payload.roles) ? payload.roles : [];
+    const options = ["<option value=\"\">General pool</option>"]
+      .concat(roles.map((role) => `<option value=\"${role}\">${role}</option>`))
+      .join("");
+
+    roleSelectEl.innerHTML = options;
+    roleSelectEl.value = selectedRole || "";
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function startRolesPolling() {
+  if (rolesPollIntervalId) {
+    window.clearInterval(rolesPollIntervalId);
+  }
+
+  loadRoles();
+  rolesPollIntervalId = window.setInterval(loadRoles, 10000);
+}
+
+function stopRolesPolling() {
+  if (!rolesPollIntervalId) {
+    return;
+  }
+  window.clearInterval(rolesPollIntervalId);
+  rolesPollIntervalId = null;
+}
+
+function showRoleSelectionPrompt() {
+  ticketNumberEl.textContent = "No ticket yet";
+  statusEl.textContent = "Please choose a role and request a ticket.";
+  retryBtn.hidden = true;
+  resetRevokeButtonState();
+  revokeBtn.hidden = true;
+  resetEstimate();
+  toggleRolePanel(true);
+  startRolesPolling();
 }
 
 function supportsNotifications() {
@@ -263,7 +341,15 @@ notificationToggleEl?.addEventListener("click", () => {
 retryBtn?.addEventListener("click", () => {
   retryBtn.hidden = true;
   retryBtn.textContent = "Try again";
+  showRoleSelectionPrompt();
+});
+
+requestTicketEl?.addEventListener("click", () => {
   createTicket();
+});
+
+refreshRolesEl?.addEventListener("click", () => {
+  loadRoles();
 });
 
 revokeBtn?.addEventListener("click", () => {
@@ -372,15 +458,19 @@ function clearActiveTicket() {
   hideCalledBanner();
   stopFallbackAlertLoop();
   stopTitleAlert();
+  selectedRole = null;
+  showRoleSelectionPrompt();
 }
 
 async function restoreTicketOrCreate() {
   const storedId = loadStoredTicketId();
   if (!storedId) {
-    createTicket();
+    showRoleSelectionPrompt();
     return;
   }
 
+  toggleRolePanel(false);
+  stopRolesPolling();
   currentTicketId = storedId;
   statusEl.textContent = "Restoring your ticket...";
   retryBtn.hidden = true;
@@ -417,6 +507,8 @@ async function createTicket() {
     return;
   }
 
+  selectedRole = selectedRoleFromUi();
+
   ticketNumberEl.textContent = "Creating ticket...";
   statusEl.textContent = "Connecting to the queue service...";
   statusEl.classList.remove("ok");
@@ -425,13 +517,15 @@ async function createTicket() {
   revokeBtn.hidden = true;
 
   try {
-    const response = await fetch(buildApiUrl("/api/tickets"), { method: "POST" });
+    const response = await fetch(buildRoleAwareApiUrl("/api/tickets", selectedRole), { method: "POST" });
     if (!response.ok) {
       throw new Error(`Ticket creation failed (${response.status})`);
     }
 
     const payload = await response.json();
     const ticket = payload.ticket;
+    toggleRolePanel(false);
+    stopRolesPolling();
     setActiveOpenTicket(ticket);
     updateEstimate();
     startPolling();
@@ -533,6 +627,7 @@ function startPolling() {
 
 window.addEventListener("beforeunload", () => {
   stopPolling();
+  stopRolesPolling();
   stopFallbackAlertLoop();
   stopTitleAlert();
 });
@@ -540,6 +635,9 @@ window.addEventListener("beforeunload", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && currentTicketId) {
     pollTicket();
+  }
+  if (document.visibilityState === "visible" && !currentTicketId) {
+    loadRoles();
   }
 });
 

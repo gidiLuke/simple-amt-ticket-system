@@ -2,6 +2,7 @@ const queryApi = new URLSearchParams(window.location.search).get("api");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
 const NOTIFICATION_ENABLED_KEY = "amt_agent_notifications_enabled";
 const PASSPHRASE_STORAGE_KEY = "amt_agent_passphrase";
+const ROLE_STORAGE_PREFIX = "amt_agent_role";
 
 const ticketsEl = document.getElementById("tickets");
 const badgeEl = document.getElementById("agent-badge");
@@ -13,6 +14,9 @@ const passphraseInputEl = document.getElementById("passphrase-input");
 const generatePassphraseEl = document.getElementById("generate-passphrase");
 const applyPassphraseEl = document.getElementById("apply-passphrase");
 const clearPassphraseEl = document.getElementById("clear-passphrase");
+const roleInputEl = document.getElementById("role-input");
+const applyRoleEl = document.getElementById("apply-role");
+const clearRoleEl = document.getElementById("clear-role");
 const userQrImageEl = document.getElementById("user-qr");
 const userLinkEl = document.getElementById("user-link");
 const downloadQrEl = document.getElementById("download-qr");
@@ -21,6 +25,8 @@ let seenTicketIds = new Set();
 let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
 let activePassphrase = normalizePassphrase(new URLSearchParams(window.location.search).get("passphrase")) ||
   normalizePassphrase(window.localStorage.getItem(PASSPHRASE_STORAGE_KEY));
+let presenceIntervalId = null;
+let activeRole = normalizeRole(window.localStorage.getItem(roleStorageKey(activePassphrase)));
 
 function normalizePassphrase(value) {
   if (typeof value !== "string") {
@@ -30,11 +36,28 @@ function normalizePassphrase(value) {
   return normalized || null;
 }
 
-function buildApiUrl(path) {
+function normalizeRole(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+}
+
+function roleStorageKey(passphrase) {
+  return `${ROLE_STORAGE_PREFIX}:${passphrase || "demo"}`;
+}
+
+function buildApiUrl(path, extraParams = {}) {
   const url = new URL(`${API_BASE_URL}${path}`);
   if (activePassphrase) {
     url.searchParams.set("passphrase", activePassphrase);
   }
+  Object.entries(extraParams).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
   return url.toString();
 }
 
@@ -76,9 +99,13 @@ function updateQueueModeLabel() {
     return;
   }
 
-  queueModeHintEl.textContent = activePassphrase
-    ? `Scoped mode: ${activePassphrase}`
-    : "Demo mode (no passphrase)";
+  const queueText = activePassphrase
+    ? `Queue scope: ${activePassphrase}`
+    : "Queue scope: demo";
+  const roleText = activeRole
+    ? `Agent role: ${activeRole} (sees general + ${activeRole})`
+    : "Agent role: general pool only";
+  queueModeHintEl.textContent = `${queueText} | ${roleText}`;
 }
 
 async function renderUserQr() {
@@ -105,10 +132,52 @@ function applyPassphrase(nextValue) {
     passphraseInputEl.value = activePassphrase || "";
   }
 
+  activeRole = normalizeRole(window.localStorage.getItem(roleStorageKey(activePassphrase)));
+  if (roleInputEl) {
+    roleInputEl.value = activeRole || "";
+  }
+
   updateQueueModeLabel();
   renderUserQr();
+  registerPresence();
   seenTicketIds = new Set();
   loadTickets();
+}
+
+function applyRole(nextValue) {
+  activeRole = normalizeRole(nextValue);
+
+  if (activeRole) {
+    window.localStorage.setItem(roleStorageKey(activePassphrase), activeRole);
+  } else {
+    window.localStorage.removeItem(roleStorageKey(activePassphrase));
+  }
+
+  if (roleInputEl) {
+    roleInputEl.value = activeRole || "";
+  }
+
+  updateQueueModeLabel();
+  registerPresence();
+  seenTicketIds = new Set();
+  loadTickets();
+}
+
+async function registerPresence() {
+  try {
+    await fetch(buildApiUrl("/api/agents/presence", { role: activeRole }), { method: "POST" });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function startPresenceHeartbeat() {
+  if (presenceIntervalId) {
+    window.clearInterval(presenceIntervalId);
+  }
+
+  registerPresence();
+  presenceIntervalId = window.setInterval(registerPresence, 15000);
 }
 
 function supportsNotifications() {
@@ -258,9 +327,11 @@ function renderTickets(tickets) {
     card.className = "ticket-card";
 
     const info = document.createElement("div");
+    const poolLabel = ticket.role ? `Role pool: ${ticket.role}` : "General pool";
     info.innerHTML = `
       <div class="ticket-number">${ticket.number}</div>
       <div class="meta">Created at ${formatTime(ticket.created_at)}</div>
+      <div class="meta">${poolLabel}</div>
     `;
 
     const action = document.createElement("button");
@@ -275,7 +346,7 @@ function renderTickets(tickets) {
 
 async function loadTickets() {
   try {
-    const response = await fetch(buildApiUrl("/api/tickets/open"));
+    const response = await fetch(buildApiUrl("/api/tickets/open", { agent_role: activeRole }));
     if (!response.ok) {
       throw new Error(`Queue fetch failed (${response.status})`);
     }
@@ -326,6 +397,14 @@ clearPassphraseEl?.addEventListener("click", () => {
   applyPassphrase(null);
 });
 
+applyRoleEl?.addEventListener("click", () => {
+  applyRole(roleInputEl?.value || null);
+});
+
+clearRoleEl?.addEventListener("click", () => {
+  applyRole(null);
+});
+
 downloadQrEl?.addEventListener("click", () => {
   if (!userQrImageEl) {
     return;
@@ -347,9 +426,20 @@ updateQueueModeLabel();
 if (passphraseInputEl) {
   passphraseInputEl.value = activePassphrase || "";
 }
+if (roleInputEl) {
+  roleInputEl.value = activeRole || "";
+}
 renderUserQr();
 updateNotificationToggle();
+startPresenceHeartbeat();
 if (notificationsEnabled && supportsNotifications() && Notification.permission === "default") {
   setNotificationsEnabled(true, false);
 }
+
+window.addEventListener("beforeunload", () => {
+  if (presenceIntervalId) {
+    window.clearInterval(presenceIntervalId);
+    presenceIntervalId = null;
+  }
+});
 

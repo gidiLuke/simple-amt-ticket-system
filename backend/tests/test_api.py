@@ -131,3 +131,45 @@ def test_ticket_numbers_start_from_one_per_scope(tmp_path: Path) -> None:
     assert scoped_second["number"] == "A-0002"
     assert other_scope_first["number"] == "A-0001"
 
+
+def test_agents_see_general_plus_own_role_pool(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    general = client.post("/api/tickets").json()["ticket"]
+    passport = client.post("/api/tickets", params={"role": "passport"}).json()["ticket"]
+    tax = client.post("/api/tickets", params={"role": "tax"}).json()["ticket"]
+
+    general_agent_view = client.get("/api/tickets/open").json()["tickets"]
+    assert [ticket["id"] for ticket in general_agent_view] == [general["id"]]
+
+    passport_agent_view = client.get("/api/tickets/open", params={"agent_role": "passport"}).json()["tickets"]
+    assert [ticket["id"] for ticket in passport_agent_view] == [general["id"], passport["id"]]
+
+    tax_agent_view = client.get("/api/tickets/open", params={"agent_role": "tax"}).json()["tickets"]
+    assert [ticket["id"] for ticket in tax_agent_view] == [general["id"], tax["id"]]
+
+
+def test_numbers_restart_per_role_pool(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    general_first = client.post("/api/tickets").json()["ticket"]
+    general_second = client.post("/api/tickets").json()["ticket"]
+    role_first = client.post("/api/tickets", params={"role": "passport"}).json()["ticket"]
+    role_second = client.post("/api/tickets", params={"role": "passport"}).json()["ticket"]
+
+    assert general_first["number"] == "A-0001"
+    assert general_second["number"] == "A-0002"
+    assert role_first["number"] == "A-0001"
+    assert role_second["number"] == "A-0002"
+
+
+def test_active_roles_list_from_agent_presence(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    client.post("/api/agents/presence", params={"role": "passport"})
+    client.post("/api/agents/presence", params={"role": "tax"})
+    client.post("/api/agents/presence", params={"role": "passport"})
+
+    roles = client.get("/api/roles").json()["roles"]
+    assert roles == ["passport", "tax"]
+

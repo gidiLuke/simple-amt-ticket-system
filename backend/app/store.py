@@ -16,15 +16,17 @@ class TicketStore:
         self._storage_file = storage_file
         self._load()
 
-    def create_ticket(self, passphrase: str | None = None) -> Ticket:
+    def create_ticket(self, passphrase: str | None = None, role: str | None = None) -> Ticket:
         normalized_passphrase = self._normalize_passphrase(passphrase)
+        normalized_role = self._normalize_role(role)
         with self._lock:
             ticket_id = self._next_id
-            scoped_number = self._next_number_for_scope(normalized_passphrase)
+            scoped_number = self._next_number_for_scope(normalized_passphrase, normalized_role)
             ticket = Ticket(
                 id=ticket_id,
                 number=self._format_number(scoped_number),
                 passphrase=normalized_passphrase,
+                role=normalized_role,
                 status="open",
                 created_at=datetime.now(timezone.utc),
             )
@@ -33,14 +35,17 @@ class TicketStore:
             self._save()
             return ticket
 
-    def list_open_tickets(self, passphrase: str | None = None) -> list[Ticket]:
+    def list_open_tickets(self, passphrase: str | None = None, agent_role: str | None = None) -> list[Ticket]:
         normalized_passphrase = self._normalize_passphrase(passphrase)
+        normalized_role = self._normalize_role(agent_role)
         with self._lock:
             return sorted(
                 [
                     ticket
                     for ticket in self._tickets.values()
-                    if ticket.status == "open" and self._matches_scope(ticket, normalized_passphrase)
+                    if ticket.status == "open"
+                    and self._matches_scope(ticket, normalized_passphrase)
+                    and self._matches_agent_visibility(ticket, normalized_role)
                 ],
                 key=lambda ticket: ticket.id,
             )
@@ -175,8 +180,12 @@ class TicketStore:
 
         return max(1, round(sum(closed_durations_minutes) / len(closed_durations_minutes)))
 
-    def _next_number_for_scope(self, passphrase: str | None) -> int:
-        in_scope = [ticket for ticket in self._tickets.values() if ticket.passphrase == passphrase]
+    def _next_number_for_scope(self, passphrase: str | None, role: str | None) -> int:
+        in_scope = [
+            ticket
+            for ticket in self._tickets.values()
+            if ticket.passphrase == passphrase and ticket.role == role
+        ]
         return len(in_scope) + 1
 
     @staticmethod
@@ -189,6 +198,21 @@ class TicketStore:
         return normalized
 
     @staticmethod
+    def _normalize_role(role: str | None) -> str | None:
+        if role is None:
+            return None
+        normalized = role.strip().lower()
+        if not normalized:
+            return None
+        return normalized
+
+    @staticmethod
     def _matches_scope(ticket: Ticket, passphrase: str | None) -> bool:
         return ticket.passphrase == passphrase
+
+    @staticmethod
+    def _matches_agent_visibility(ticket: Ticket, agent_role: str | None) -> bool:
+        if agent_role is None:
+            return ticket.role is None
+        return ticket.role is None or ticket.role == agent_role
 
