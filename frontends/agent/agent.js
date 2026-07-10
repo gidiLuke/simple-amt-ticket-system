@@ -1,13 +1,126 @@
 const queryApi = new URLSearchParams(window.location.search).get("api");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
 const NOTIFICATION_ENABLED_KEY = "amt_agent_notifications_enabled";
+const PASSPHRASE_STORAGE_KEY = "amt_agent_passphrase";
 
 const ticketsEl = document.getElementById("tickets");
 const badgeEl = document.getElementById("agent-badge");
 const notificationToggleEl = document.getElementById("notification-toggle");
+const settingsToggleEl = document.getElementById("settings-toggle");
+const settingsPanelEl = document.getElementById("settings-panel");
+const queueModeHintEl = document.getElementById("queue-mode-hint");
+const passphraseInputEl = document.getElementById("passphrase-input");
+const generatePassphraseEl = document.getElementById("generate-passphrase");
+const applyPassphraseEl = document.getElementById("apply-passphrase");
+const clearPassphraseEl = document.getElementById("clear-passphrase");
+const userQrCanvasEl = document.getElementById("user-qr");
+const userLinkEl = document.getElementById("user-link");
+const downloadQrEl = document.getElementById("download-qr");
 const imprintLinkEl = document.getElementById("imprint-link");
 let seenTicketIds = new Set();
 let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
+let activePassphrase = normalizePassphrase(new URLSearchParams(window.location.search).get("passphrase")) ||
+  normalizePassphrase(window.localStorage.getItem(PASSPHRASE_STORAGE_KEY));
+
+function normalizePassphrase(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9-\s]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-");
+  return normalized || null;
+}
+
+function buildApiUrl(path) {
+  const url = new URL(`${API_BASE_URL}${path}`);
+  if (activePassphrase) {
+    url.searchParams.set("passphrase", activePassphrase);
+  }
+  return url.toString();
+}
+
+function suggestedUserLink() {
+  const current = new URL(window.location.href);
+  const userPath = current.pathname.replace(/\/agent\/[^/]*$/, "/user/");
+  const userUrl = new URL(userPath, current.origin);
+
+  if (queryApi) {
+    userUrl.searchParams.set("api", queryApi);
+  }
+  if (activePassphrase) {
+    userUrl.searchParams.set("passphrase", activePassphrase);
+  }
+
+  return userUrl.toString();
+}
+
+function makeRandomPassphrase() {
+  const wordsA = ["amber", "brisk", "civic", "delta", "eager", "fancy", "gentle", "harbor", "ivory", "jolly"];
+  const wordsB = ["otter", "lantern", "meadow", "signal", "paper", "rocket", "ticket", "window", "forest", "piano"];
+  const wordsC = ["bridge", "sheriff", "station", "pocket", "beacon", "ledger", "avenue", "village", "harbor", "office"];
+
+  const pick = (collection) => collection[Math.floor(Math.random() * collection.length)];
+  return `${pick(wordsA)}-${pick(wordsB)}-${pick(wordsC)}`;
+}
+
+function updateQueueModeLabel() {
+  if (!queueModeHintEl) {
+    return;
+  }
+
+  queueModeHintEl.textContent = activePassphrase
+    ? `Scoped mode: ${activePassphrase}`
+    : "Demo mode (no passphrase)";
+}
+
+async function renderUserQr() {
+  if (!userQrCanvasEl || !userLinkEl) {
+    return;
+  }
+
+  const link = suggestedUserLink();
+  userLinkEl.textContent = link;
+  userLinkEl.href = link;
+
+  if (!window.QRCode) {
+    const context = userQrCanvasEl.getContext("2d");
+    if (context) {
+      context.clearRect(0, 0, userQrCanvasEl.width, userQrCanvasEl.height);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, userQrCanvasEl.width, userQrCanvasEl.height);
+      context.fillStyle = "#111a2e";
+      context.font = "14px sans-serif";
+      context.fillText("QR unavailable", 56, 112);
+    }
+    return;
+  }
+
+  await window.QRCode.toCanvas(userQrCanvasEl, link, {
+    width: 220,
+    margin: 1,
+    color: {
+      dark: "#111a2e",
+      light: "#ffffff",
+    },
+  });
+}
+
+function applyPassphrase(nextValue) {
+  activePassphrase = normalizePassphrase(nextValue);
+  if (activePassphrase) {
+    window.localStorage.setItem(PASSPHRASE_STORAGE_KEY, activePassphrase);
+  } else {
+    window.localStorage.removeItem(PASSPHRASE_STORAGE_KEY);
+  }
+
+  if (passphraseInputEl) {
+    passphraseInputEl.value = activePassphrase || "";
+  }
+
+  updateQueueModeLabel();
+  renderUserQr();
+  seenTicketIds = new Set();
+  loadTickets();
+}
 
 function supportsNotifications() {
   return typeof window !== "undefined" && "Notification" in window;
@@ -127,7 +240,7 @@ async function claimTicket(ticketId, button) {
   button.textContent = "Calling...";
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tickets/${ticketId}/claim`, {
+    const response = await fetch(buildApiUrl(`/api/tickets/${ticketId}/claim`), {
       method: "POST"
     });
 
@@ -173,7 +286,7 @@ function renderTickets(tickets) {
 
 async function loadTickets() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tickets/open`);
+    const response = await fetch(buildApiUrl("/api/tickets/open"));
     if (!response.ok) {
       throw new Error(`Queue fetch failed (${response.status})`);
     }
@@ -199,9 +312,50 @@ async function loadTickets() {
   }
 }
 
+settingsToggleEl?.addEventListener("click", () => {
+  if (!settingsPanelEl) {
+    return;
+  }
+  settingsPanelEl.hidden = !settingsPanelEl.hidden;
+  if (!settingsPanelEl.hidden) {
+    passphraseInputEl?.focus();
+  }
+});
+
+generatePassphraseEl?.addEventListener("click", () => {
+  if (!passphraseInputEl) {
+    return;
+  }
+  passphraseInputEl.value = makeRandomPassphrase();
+});
+
+applyPassphraseEl?.addEventListener("click", () => {
+  applyPassphrase(passphraseInputEl?.value || null);
+});
+
+clearPassphraseEl?.addEventListener("click", () => {
+  applyPassphrase(null);
+});
+
+downloadQrEl?.addEventListener("click", () => {
+  if (!userQrCanvasEl) {
+    return;
+  }
+  const link = document.createElement("a");
+  const suffix = activePassphrase || "demo";
+  link.download = `amt-queue-${suffix}.png`;
+  link.href = userQrCanvasEl.toDataURL("image/png");
+  link.click();
+});
+
 loadTickets();
 window.setInterval(loadTickets, 2000);
 applyImprintLink();
+updateQueueModeLabel();
+if (passphraseInputEl) {
+  passphraseInputEl.value = activePassphrase || "";
+}
+renderUserQr();
 updateNotificationToggle();
 if (notificationsEnabled && supportsNotifications() && Notification.permission === "default") {
   setNotificationsEnabled(true, false);

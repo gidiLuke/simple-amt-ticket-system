@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class Ticket(BaseModel):
     id: int
     number: str
+    passphrase: str | None = None
     status: str = Field(pattern="^(open|closed)$")
     created_at: datetime
     claimed_at: datetime | None = None

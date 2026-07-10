@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import (
@@ -48,42 +48,45 @@ def create_app(storage_file: Path | None = None) -> FastAPI:
         return {"status": "ok", "version": app.version}
 
     @app.post("/api/tickets", response_model=CreateTicketResponse)
-    def create_ticket() -> CreateTicketResponse:
-        ticket = store.create_ticket()
+    def create_ticket(passphrase: str | None = Query(default=None)) -> CreateTicketResponse:
+        ticket = store.create_ticket(passphrase=passphrase)
         return CreateTicketResponse(ticket=ticket)
 
     @app.get("/api/tickets/open", response_model=OpenTicketsResponse)
-    def open_tickets() -> OpenTicketsResponse:
-        return OpenTicketsResponse(tickets=store.list_open_tickets())
+    def open_tickets(passphrase: str | None = Query(default=None)) -> OpenTicketsResponse:
+        return OpenTicketsResponse(tickets=store.list_open_tickets(passphrase=passphrase))
 
     @app.post("/api/tickets/{ticket_id}/claim", response_model=ClaimTicketResponse)
-    def claim_ticket(ticket_id: int) -> ClaimTicketResponse:
+    def claim_ticket(ticket_id: int, passphrase: str | None = Query(default=None)) -> ClaimTicketResponse:
         try:
-            ticket = store.claim_ticket(ticket_id)
+            ticket = store.claim_ticket(ticket_id, passphrase=passphrase)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
         return ClaimTicketResponse(ticket=ticket)
 
     @app.post("/api/tickets/{ticket_id}/revoke", response_model=ClaimTicketResponse)
-    def revoke_ticket(ticket_id: int) -> ClaimTicketResponse:
+    def revoke_ticket(ticket_id: int, passphrase: str | None = Query(default=None)) -> ClaimTicketResponse:
         try:
-            ticket = store.revoke_ticket(ticket_id)
+            ticket = store.revoke_ticket(ticket_id, passphrase=passphrase)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
         return ClaimTicketResponse(ticket=ticket)
 
     @app.get("/api/tickets/{ticket_id}", response_model=TicketStatusResponse)
-    def ticket_status(ticket_id: int) -> TicketStatusResponse:
+    def ticket_status(ticket_id: int, passphrase: str | None = Query(default=None)) -> TicketStatusResponse:
         try:
-            ticket = store.get_ticket(ticket_id)
+            ticket = store.get_ticket(ticket_id, passphrase=passphrase)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
         return TicketStatusResponse(ticket=ticket)
 
     @app.get("/api/tickets/{ticket_id}/estimate", response_model=TicketEstimateResponse)
-    def ticket_estimate(ticket_id: int) -> TicketEstimateResponse:
+    def ticket_estimate(ticket_id: int, passphrase: str | None = Query(default=None)) -> TicketEstimateResponse:
         try:
-            people_ahead, estimated_wait_minutes, average_service_minutes = store.estimate_for_ticket(ticket_id)
+            people_ahead, estimated_wait_minutes, average_service_minutes = store.estimate_for_ticket(
+                ticket_id,
+                passphrase=passphrase,
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Ticket not found") from exc
 

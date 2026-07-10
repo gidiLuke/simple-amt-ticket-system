@@ -1,7 +1,9 @@
 const queryApi = new URLSearchParams(window.location.search).get("api");
+const queryPassphrase = new URLSearchParams(window.location.search).get("passphrase");
 const API_BASE_URL = queryApi || window.APP_CONFIG?.API_BASE_URL || "http://localhost:8000";
-const STORAGE_KEY = "amt_active_ticket_id";
 const NOTIFICATION_ENABLED_KEY = "amt_notifications_enabled";
+const PASS_PHRASE = normalizePassphrase(queryPassphrase);
+const STORAGE_KEY = `amt_active_ticket_id:${PASS_PHRASE || "demo"}`;
 
 const ticketNumberEl = document.getElementById("ticket-number");
 const statusEl = document.getElementById("status");
@@ -22,6 +24,23 @@ let pollIntervalId = null;
 let titleAlertIntervalId = null;
 let fallbackAlertIntervalId = null;
 let notificationsEnabled = window.localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
+
+function normalizePassphrase(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+}
+
+function buildApiUrl(path) {
+  const url = new URL(`${API_BASE_URL}${path}`);
+  if (PASS_PHRASE) {
+    url.searchParams.set("passphrase", PASS_PHRASE);
+  }
+  return url.toString();
+}
 
 function supportsNotifications() {
   return typeof window !== "undefined" && "Notification" in window;
@@ -319,7 +338,7 @@ async function updateEstimate() {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tickets/${currentTicketId}/estimate`);
+    const response = await fetch(buildApiUrl(`/api/tickets/${currentTicketId}/estimate`));
     if (!response.ok) {
       throw new Error(`Estimate failed (${response.status})`);
     }
@@ -368,7 +387,7 @@ async function restoreTicketOrCreate() {
   revokeBtn.hidden = false;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tickets/${storedId}`);
+    const response = await fetch(buildApiUrl(`/api/tickets/${storedId}`));
     if (!response.ok) {
       throw new Error(`Ticket restore failed (${response.status})`);
     }
@@ -406,7 +425,7 @@ async function createTicket() {
   revokeBtn.hidden = true;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tickets`, { method: "POST" });
+    const response = await fetch(buildApiUrl("/api/tickets"), { method: "POST" });
     if (!response.ok) {
       throw new Error(`Ticket creation failed (${response.status})`);
     }
@@ -428,7 +447,7 @@ async function pollTicket() {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tickets/${currentTicketId}`);
+    const response = await fetch(buildApiUrl(`/api/tickets/${currentTicketId}`));
     if (!response.ok) {
       throw new Error(`Status poll failed (${response.status})`);
     }
@@ -477,7 +496,7 @@ async function revokeTicket() {
   revokeBtn.textContent = "Revoking...";
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tickets/${currentTicketId}/revoke`, {
+    const response = await fetch(buildApiUrl(`/api/tickets/${currentTicketId}/revoke`), {
       method: "POST"
     });
 

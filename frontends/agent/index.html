@@ -11,10 +11,34 @@
       <section class="glass hero">
         <div class="hero-top-row">
           <h1 class="headline">Agent Ticket Console</h1>
-          <button id="notification-toggle" class="notify-chip" type="button" hidden></button>
+          <div class="hero-actions">
+            <button id="settings-toggle" class="notify-chip" type="button">Queue settings</button>
+            <button id="notification-toggle" class="notify-chip" type="button" hidden></button>
+          </div>
         </div>
         <p class="sub">Live queue for incoming front-desk QR tickets.</p>
         <span id="agent-badge" class="badge">Listening for new tickets...</span>
+
+        <div id="queue-mode-hint" class="mode-hint">Demo mode (no passphrase)</div>
+
+        <div id="settings-panel" class="settings-panel" hidden>
+          <label class="settings-label" for="passphrase-input">Queue passphrase (optional)</label>
+          <div class="settings-row">
+            <input id="passphrase-input" class="passphrase-input" type="text" maxlength="64" placeholder="e.g. amber-river-lantern" />
+            <button id="generate-passphrase" class="secondary" type="button">Generate</button>
+          </div>
+          <div class="settings-row">
+            <button id="apply-passphrase" class="secondary" type="button">Apply</button>
+            <button id="clear-passphrase" class="secondary" type="button">Use demo mode</button>
+          </div>
+
+          <div class="qr-block">
+            <div class="qr-header">User entry QR</div>
+            <canvas id="user-qr" width="220" height="220"></canvas>
+            <a id="user-link" class="imprint-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+            <button id="download-qr" class="secondary" type="button">Download QR</button>
+          </div>
+        </div>
       </section>
 
       <section class="glass hero" style="margin-top: 20px">
@@ -32,6 +56,7 @@
     </footer>
 
     <script src="../config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
     <script src="./agent.js"></script>
   </body>
 </html>

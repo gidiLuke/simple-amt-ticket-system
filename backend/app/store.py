@@ -16,12 +16,13 @@ class TicketStore:
         self._storage_file = storage_file
         self._load()
 
-    def create_ticket(self) -> Ticket:
+    def create_ticket(self, passphrase: str | None = None) -> Ticket:
         with self._lock:
             ticket_id = self._next_id
             ticket = Ticket(
                 id=ticket_id,
                 number=self._format_number(ticket_id),
+                passphrase=self._normalize_passphrase(passphrase),
                 status="open",
                 created_at=datetime.now(timezone.utc),
             )
@@ -30,19 +31,28 @@ class TicketStore:
             self._save()
             return ticket
 
-    def list_open_tickets(self) -> list[Ticket]:
+    def list_open_tickets(self, passphrase: str | None = None) -> list[Ticket]:
+        normalized_passphrase = self._normalize_passphrase(passphrase)
         with self._lock:
             return sorted(
-                [ticket for ticket in self._tickets.values() if ticket.status == "open"],
+                [
+                    ticket
+                    for ticket in self._tickets.values()
+                    if ticket.status == "open" and self._matches_scope(ticket, normalized_passphrase)
+                ],
                 key=lambda ticket: ticket.id,
             )
 
-    def claim_ticket(self, ticket_id: int) -> Ticket:
+    def claim_ticket(self, ticket_id: int, passphrase: str | None = None) -> Ticket:
+        normalized_passphrase = self._normalize_passphrase(passphrase)
         with self._lock:
             if ticket_id not in self._tickets:
                 raise KeyError(ticket_id)
 
             ticket = self._tickets[ticket_id]
+            if not self._matches_scope(ticket, normalized_passphrase):
+                raise KeyError(ticket_id)
+
             if ticket.status == "closed":
                 return ticket
 
@@ -57,12 +67,16 @@ class TicketStore:
             self._save()
             return updated
 
-    def revoke_ticket(self, ticket_id: int) -> Ticket:
+    def revoke_ticket(self, ticket_id: int, passphrase: str | None = None) -> Ticket:
+        normalized_passphrase = self._normalize_passphrase(passphrase)
         with self._lock:
             if ticket_id not in self._tickets:
                 raise KeyError(ticket_id)
 
             ticket = self._tickets[ticket_id]
+            if not self._matches_scope(ticket, normalized_passphrase):
+                raise KeyError(ticket_id)
+
             if ticket.status == "closed":
                 return ticket
 
@@ -77,17 +91,25 @@ class TicketStore:
             self._save()
             return updated
 
-    def estimate_for_ticket(self, ticket_id: int) -> tuple[int, int, int]:
+    def estimate_for_ticket(self, ticket_id: int, passphrase: str | None = None) -> tuple[int, int, int]:
+        normalized_passphrase = self._normalize_passphrase(passphrase)
         with self._lock:
             if ticket_id not in self._tickets:
                 raise KeyError(ticket_id)
 
             ticket = self._tickets[ticket_id]
+            if not self._matches_scope(ticket, normalized_passphrase):
+                raise KeyError(ticket_id)
+
             if ticket.status == "closed":
                 return (0, 0, self._default_service_minutes())
 
             open_tickets = sorted(
-                [item for item in self._tickets.values() if item.status == "open"],
+                [
+                    item
+                    for item in self._tickets.values()
+                    if item.status == "open" and self._matches_scope(item, normalized_passphrase)
+                ],
                 key=lambda item: item.id,
             )
             people_ahead = len([item for item in open_tickets if item.id < ticket_id])
@@ -96,11 +118,15 @@ class TicketStore:
             estimated_wait_minutes = people_ahead * average_service_minutes
             return (people_ahead, estimated_wait_minutes, average_service_minutes)
 
-    def get_ticket(self, ticket_id: int) -> Ticket:
+    def get_ticket(self, ticket_id: int, passphrase: str | None = None) -> Ticket:
+        normalized_passphrase = self._normalize_passphrase(passphrase)
         with self._lock:
             if ticket_id not in self._tickets:
                 raise KeyError(ticket_id)
-            return self._tickets[ticket_id]
+            ticket = self._tickets[ticket_id]
+            if not self._matches_scope(ticket, normalized_passphrase):
+                raise KeyError(ticket_id)
+            return ticket
 
     def _load(self) -> None:
         if self._storage_file is None or not self._storage_file.exists():
@@ -146,4 +172,17 @@ class TicketStore:
             return self._default_service_minutes()
 
         return max(1, round(sum(closed_durations_minutes) / len(closed_durations_minutes)))
+
+    @staticmethod
+    def _normalize_passphrase(passphrase: str | None) -> str | None:
+        if passphrase is None:
+            return None
+        normalized = passphrase.strip().lower()
+        if not normalized:
+            return None
+        return normalized
+
+    @staticmethod
+    def _matches_scope(ticket: Ticket, passphrase: str | None) -> bool:
+        return ticket.passphrase == passphrase
 

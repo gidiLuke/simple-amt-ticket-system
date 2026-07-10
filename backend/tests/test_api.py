@@ -80,3 +80,38 @@ def test_estimate_returns_people_ahead_and_wait(tmp_path: Path) -> None:
     refreshed = client.get(f"/api/tickets/{second['id']}/estimate").json()
     assert refreshed["people_ahead"] == 0
 
+
+def test_passphrase_scopes_open_queues(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    demo_ticket = client.post("/api/tickets").json()["ticket"]
+    alpha_ticket = client.post("/api/tickets", params={"passphrase": "alpha-team"}).json()["ticket"]
+    beta_ticket = client.post("/api/tickets", params={"passphrase": "beta-team"}).json()["ticket"]
+
+    demo_queue = client.get("/api/tickets/open").json()["tickets"]
+    assert [ticket["id"] for ticket in demo_queue] == [demo_ticket["id"]]
+
+    alpha_queue = client.get("/api/tickets/open", params={"passphrase": "alpha-team"}).json()["tickets"]
+    assert [ticket["id"] for ticket in alpha_queue] == [alpha_ticket["id"]]
+
+    beta_queue = client.get("/api/tickets/open", params={"passphrase": "beta-team"}).json()["tickets"]
+    assert [ticket["id"] for ticket in beta_queue] == [beta_ticket["id"]]
+
+
+def test_ticket_access_requires_matching_passphrase(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+
+    scoped_ticket = client.post("/api/tickets", params={"passphrase": "alpha-team"}).json()["ticket"]
+
+    wrong_scope_status = client.get(f"/api/tickets/{scoped_ticket['id']}")
+    assert wrong_scope_status.status_code == 404
+
+    correct_scope_status = client.get(f"/api/tickets/{scoped_ticket['id']}", params={"passphrase": "alpha-team"})
+    assert correct_scope_status.status_code == 200
+
+    wrong_scope_claim = client.post(f"/api/tickets/{scoped_ticket['id']}/claim")
+    assert wrong_scope_claim.status_code == 404
+
+    correct_scope_claim = client.post(f"/api/tickets/{scoped_ticket['id']}/claim", params={"passphrase": "alpha-team"})
+    assert correct_scope_claim.status_code == 200
+
